@@ -4,376 +4,468 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Coffee Leaf Disease Detection · YOLOv8</title>
-  <meta name="description" content="Detect coffee leaf disease from a single photo with a YOLOv8 detector served by Flask and OpenCV. Healthy, Phoma leaf spot, coffee leaf rust and leaf miner.">
-  <meta name="theme-color" content="#070a09">
-  <meta property="og:title" content="Coffee Leaf Disease Detection">
-  <meta property="og:description" content="YOLOv8 + OpenCV + Flask object detection for coffee leaf disease.">
+  <meta name="description" content="Upload one photograph of a coffee leaf and read the diagnosed class, the lesion boxes and the field protocol. A YOLOv8 detector served by Flask and OpenCV.">
+  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+
   <meta property="og:type" content="website">
+  <meta property="og:title" content="Coffee Leaf Disease Detection with YOLOv8">
+  <meta property="og:description" content="Four coffee leaf conditions, detected from one photograph in about 20 milliseconds.">
+  <meta property="og:image" content="{{ url_for('static', filename='img/og.jpg', _external=True) }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+  <script src="{{ asset('js/boot.js') }}"></script>
 </head>
 <body>
 
-{# ---------- Reusable leaf illustration per disease class ---------- #}
-{% macro leaf_icon(key) -%}
-<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-  <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" fill="currentColor" opacity=".16"/>
-  <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" stroke="currentColor" stroke-width="1.6"/>
-  <path d="M11 37.5C16 27 24 19 36 12" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
-  {%- if key == 'bercak_phoma' %}
-  <circle cx="20" cy="20" r="3.4" fill="currentColor"/>
-  <circle cx="29" cy="26" r="2.5" fill="currentColor" opacity=".75"/>
-  <circle cx="23" cy="31" r="1.9" fill="currentColor" opacity=".55"/>
-  {%- elif key == 'karat_daun' %}
-  <circle cx="19" cy="21" r="2.1" fill="currentColor"/>
-  <circle cx="28" cy="24" r="2.6" fill="currentColor"/>
-  <circle cx="24" cy="30" r="1.9" fill="currentColor" opacity=".8"/>
-  <circle cx="33" cy="18" r="1.7" fill="currentColor" opacity=".7"/>
-  {%- elif key == 'pengorok_daun' %}
-  <path d="M16 25c3-4 5-9 9-7s4 5 8 7" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-  <path d="M18 31c3-4 5-8 8-6s4 4 7 6" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".65"/>
-  {%- else %}
-  <path d="M20 28.5l3.6 4L31.5 22" stroke="currentColor" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  {%- endif %}
-</svg>
+{% macro disease_tab(key, info, first) -%}
+<button class="tab" type="button" role="tab" data-class="{{ key }}"
+        id="tab-{{ key }}" aria-controls="panel-{{ key }}"
+        aria-selected="{{ 'true' if first else 'false' }}">
+  <img src="{{ url_for('static', filename=samples[key]) }}" alt="">
+  {{ info.label }}
+</button>
 {%- endmacro %}
 
-{% set severity_color = {'high': 'var(--danger)', 'moderate': 'var(--warn)', 'none': 'var(--accent)'} %}
+{% macro disease_panel(key, info, first) -%}
+<div id="panel-{{ key }}" role="tabpanel" aria-labelledby="tab-{{ key }}"{% if not first %} hidden{% endif %}>
+  <h3>{{ info.label }}</h3>
+  <p class="readout__pathogen">{{ info.pathogen }}</p>
+  <p class="readout__summary">{{ info.summary }}</p>
+  <div class="readout__block">
+    <h4 class="readout__heading">Observed symptoms</h4>
+    <ul class="bullets bullets--symptom">
+      {% for symptom in info.symptoms %}<li>{{ symptom }}</li>{% endfor %}
+    </ul>
+  </div>
+  <div class="readout__block">
+    <h4 class="readout__heading">Recommended protocol</h4>
+    <ul class="bullets">
+      {% for step in info.treatment %}<li>{{ step }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{%- endmacro %}
 
-<header class="site-header" id="site-header">
-  <div class="wrap nav">
-    <a class="brand" href="#overview">
+<a class="skip" href="#console">Skip to the detector</a>
+
+<header class="nav" id="nav">
+  <div class="shell nav__inner">
+    <a class="wordmark" href="#top">
       <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-        <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" fill="#37d99a" opacity=".25"/>
-        <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" stroke="#37d99a" stroke-width="1.8"/>
-        <circle cx="30" cy="22" r="3" fill="#e0a96d"/>
+        <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" fill="currentColor" opacity=".22"/>
+        <path d="M9 35C9 19 19 9 40 6.5 38.5 27 29 36.5 15.5 36.5A9 9 0 0 1 9 35z" stroke="currentColor" stroke-width="1.9"/>
+        <circle cx="30" cy="21" r="3.2" fill="currentColor" opacity=".65"/>
       </svg>
-      <span>CoffeeLeaf<small>disease detection</small></span>
+      CoffeeLeaf
     </a>
-    <nav class="nav-links">
-      <a href="#pipeline">Pipeline</a>
-      <a href="#console">Console</a>
-      <a href="#library">Diseases</a>
-      <a href="#metrics">Metrics</a>
+    <nav class="nav__links" aria-label="Sections">
+      <a href="#classes">Classes</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#method">Method</a>
+      <a href="#limits">Limits</a>
     </nav>
-    <span class="status-pill" id="status-pill"><i></i> <span id="status-text">Ready</span></span>
-    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+    <button class="nav__theme" id="nav-theme" type="button" aria-label="Switch between light and dark appearance">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <path d="M3 6h18M3 12h18M3 18h18"/>
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2.6v2.2M12 19.2v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+      </svg>
+    </button>
+    <button class="nav__toggle" id="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M3 6.5h18M3 12h18M3 17.5h18"/>
       </svg>
     </button>
   </div>
 </header>
 
 <main>
-  <!-- ================= HERO ================= -->
-  <section class="section hero" id="overview">
-    <div class="wrap hero-grid">
-      <div>
-        <span class="eyebrow">YOLOv8 · OpenCV · Flask</span>
-        <h1>Read the health of a coffee leaf in <em>one shot</em>.</h1>
-        <p class="hero-lede">
-          An object-detection pipeline trained on 3,992 annotated leaf images.
-          Upload a photo and get the diagnosed class, per-lesion bounding boxes,
-          confidence scores and a field treatment protocol — in under a second.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn--primary" href="#console">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Start a diagnosis
-          </a>
-          <a class="btn btn--ghost" href="#metrics">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 3 4 5-8"/></svg>
-            View model metrics
-          </a>
+  <!-- ===================== HERO ===================== -->
+  <section class="hero" id="top">
+    <div class="shell hero__head">
+      <h1 class="rise">Coffee leaf disease detection.</h1>
+      <p class="hero__statement rise">
+        A YOLOv8 detector trained on 3,992 annotated leaf photos. Upload a picture, then read
+        the class, the lesion boxes and the field protocol.
+      </p>
+      <div class="hero__actions rise">
+        <a class="button button--primary" href="#console">
+          Detect a leaf
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+
+      <dl class="figures rise">
+        <div><dt>Classes</dt><dd class="num">4</dd></div>
+        <div><dt>mAP@50</dt><dd class="num">{{ metrics.map50 }}%</dd></div>
+        <div><dt>Model call</dt><dd class="num">≈20 ms</dd></div>
+        <div><dt>Training images</dt><dd class="num">3,493</dd></div>
+      </dl>
+    </div>
+
+    <div class="shell shell--wide">
+      <div class="compare rise" id="compare">
+        <img src="{{ url_for('static', filename='img/cases/karat_daun-input.jpg') }}"
+             alt="A coffee leaf photographed on a plain background" width="1400" height="700">
+        <div class="compare__after">
+          <img src="{{ url_for('static', filename='img/cases/karat_daun-output.jpg') }}"
+               alt="The same leaf with the detector's boxes drawn over 26 rust lesions" width="1400" height="700">
         </div>
-        <dl class="hero-stats">
-          <div><strong>4</strong><span>Classes</span></div>
-          <div><strong>{{ metrics.map50 }}%</strong><span>mAP@50</span></div>
-          <div><strong>&lt;1s</strong><span>Inference</span></div>
-          <div><strong>3,992</strong><span>Images</span></div>
+        <span class="compare__tag compare__tag--before">Photograph</span>
+        <span class="compare__tag compare__tag--after">Model output</span>
+        <div class="compare__handle" id="compare-handle" role="slider" tabindex="0"
+             aria-label="Reveal the model output" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+          <span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CONSOLE ===================== -->
+  <section class="section" id="console">
+    <div class="shell">
+      <div class="intro rise">
+        <h2>Run it on your own leaf.</h2>
+        <p>
+          The photograph is decoded in memory and never written to disk. Nothing identifies
+          you — only the predicted class and the latency, counted anonymously.
+        </p>
+      </div>
+
+      <div class="console rise mt-lg">
+        <div class="console__input">
+          <div class="segmented" id="segmented" data-active="0">
+            <span class="segmented__thumb" aria-hidden="true"></span>
+            <button type="button" id="tab-upload" role="tab" aria-selected="true" aria-controls="pane-upload">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+              Upload
+            </button>
+            <button type="button" id="tab-camera" role="tab" aria-selected="false" aria-controls="pane-camera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2 2 0 0 1 5 6.5h2.2l1.4-2h7l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
+              Camera
+            </button>
+          </div>
+
+          <div id="pane-upload" role="tabpanel" aria-labelledby="tab-upload">
+            <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose leaf photographs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+              <strong>Drop leaf photographs</strong>
+              <small>or click to browse · up to {{ max_batch }} at once<br>PNG, JPG, BMP, WEBP · max {{ max_upload_mb }} MB each</small>
+              <input type="file" id="file-input" accept="image/png,image/jpeg,image/bmp,image/webp" multiple hidden>
+              <div class="preview" id="preview">
+                <img id="preview-img" src="" alt="">
+                <div class="preview__meta">
+                  <span id="preview-name"></span>
+                  <button type="button" id="preview-clear">Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="pane-camera" role="tabpanel" aria-labelledby="tab-camera" hidden>
+            <div class="camera">
+              <video id="camera-video" autoplay playsinline muted></video>
+              <canvas id="camera-canvas" hidden></canvas>
+              <div class="camera__placeholder" id="camera-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2 2 0 0 1 5 6.5h2.2l1.4-2h7l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.4"/></svg>
+                <span id="camera-note">Allow camera access to capture a leaf.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="samples">
+            <span class="samples__label">Or start from a sample photograph</span>
+            {% for key, info in diseases.items() %}
+            <button class="chip" type="button"
+                    data-sample="{{ url_for('static', filename=samples[key]) }}"
+                    data-name="{{ samples[key].split('/')[-1] }}">
+              <img src="{{ url_for('static', filename=samples[key]) }}" alt="">
+              <span>{{ info.label }}</span>
+            </button>
+            {% endfor %}
+          </div>
+
+          <div>
+            <div class="slider__head">
+              <label for="conf">Confidence threshold</label>
+              <output id="conf-out" class="num" for="conf">0.25</output>
+            </div>
+            <input type="range" id="conf" min="0.05" max="0.95" step="0.05" value="0.25">
+          </div>
+
+          <button class="button button--primary" id="run" type="button" disabled>
+            <svg class="button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5 16.5 16.5"/></svg>
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="run-label">Run detection</span>
+          </button>
+        </div>
+
+        <div class="console__output" aria-live="polite">
+          <div class="result__empty" id="result-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3.5-5 3 3.5L19 8"/></svg>
+            <span>Detection results appear here — lesion boxes, confidence and the treatment protocol.</span>
+          </div>
+
+          <div class="result__body" id="result-body" hidden>
+            <div class="shot">
+              <img id="shot-img" src="" alt="Detected lesions drawn on the analysed photograph" data-zoom>
+              <div class="shot__meta" id="shot-meta"></div>
+            </div>
+
+            <div class="verdict">
+              <div class="verdict__head">
+                <h3 id="verdict-title"></h3>
+                <span class="pill" id="verdict-pill"></span>
+              </div>
+              <p class="verdict__pathogen" id="verdict-pathogen"></p>
+              <p class="verdict__summary" id="verdict-summary"></p>
+            </div>
+
+            <div class="columns">
+              <div>
+                <h4>Observed symptoms</h4>
+                <ul class="bullets bullets--symptom" id="verdict-symptoms"></ul>
+              </div>
+              <div>
+                <h4>Recommended protocol</h4>
+                <ul class="bullets" id="verdict-treatment"></ul>
+              </div>
+            </div>
+
+            <table class="detections">
+              <caption id="detections-caption">Detections</caption>
+              <thead>
+                <tr><th scope="col">Class</th><th scope="col">Confidence</th><th scope="col">Bar</th></tr>
+              </thead>
+              <tbody id="detection-rows"></tbody>
+            </table>
+
+            <div class="result__actions">
+              <button class="button button--outline button--small" id="btn-download" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M4 20h16"/></svg>
+                Download result
+              </button>
+              <button class="button button--outline button--small" id="btn-copy" type="button">Copy JSON</button>
+              <button class="button button--outline button--small" id="btn-reset" type="button">New scan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rise mt-xl">
+        <div id="queue"></div>
+      </div>
+
+      <div class="rise mt-lg">
+        <div class="slider__head">
+          <label id="rail-label">Scans from this browser</label>
+          <button class="button button--quiet button--small" id="rail-clear" type="button">Clear</button>
+        </div>
+        <div class="rail" id="rail" aria-labelledby="rail-label"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CLASSES ===================== -->
+  <section class="section section--well" id="classes">
+    <div class="shell">
+      <div class="intro rise">
+        <h2>Four conditions, four photographs.</h2>
+        <p>
+          Every image below is a real photograph run through the trained model — no mock-ups.
+          Pick a class to see the detector's output and the protocol the API returns.
+        </p>
+      </div>
+
+      <div class="explorer">
+        <div class="tabs" id="explorer-tabs" role="tablist" aria-label="Disease class">
+          {% for key, info in diseases.items() %}
+          {{ disease_tab(key, info, loop.first) }}
+          {% endfor %}
+        </div>
+
+        <figure class="explorer__stage rise" id="explorer-stage">
+          {% for key in diseases %}
+          <div class="explorer__pair" data-class="{{ key }}"{% if not loop.first %} hidden{% endif %}>
+            <img src="{{ url_for('static', filename='img/cases/' ~ key ~ '-input.jpg') }}"
+                 alt="A photograph of a leaf with {{ diseases[key].label }}">
+            <img src="{{ url_for('static', filename='img/cases/' ~ key ~ '-output.jpg') }}"
+                 alt="The same leaf with the detector's boxes drawn on it">
+          </div>
+          {% endfor %}
+        </figure>
+
+        <div class="readout rise">
+          <div id="explorer-readout">
+            {% for key, info in diseases.items() %}
+            {{ disease_panel(key, info, loop.first) }}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <p class="rise note mt-md">
+        The healthy example is a validation image from the Coffee Leaf v5 dataset (CC BY 4.0);
+        the other three are photographs supplied with this project.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== EVIDENCE ===================== -->
+  <section class="section" id="evidence">
+    <div class="shell">
+      <div class="intro rise">
+        <h2>What the numbers actually say.</h2>
+        <p>
+          Final validation epoch of a 50-epoch fine-tune. The gap between mAP@50 and
+          mAP@50-95 is the honest headline: the classes are almost always right, the boxes
+          are not yet tight.
+        </p>
+      </div>
+
+      <dl class="evidence__figures rise">
+        <div><dt>Precision</dt><dd class="num">{{ metrics.precision }}%</dd></div>
+        <div><dt>Recall</dt><dd class="num">{{ metrics.recall }}%</dd></div>
+        <div><dt>F1 score</dt><dd class="num">{{ metrics.f1_score }}%</dd></div>
+        <div><dt>mAP@50</dt><dd class="num">{{ metrics.map50 }}%</dd></div>
+        <div><dt>mAP@50-95</dt><dd class="num">{{ metrics.map50_95 }}%</dd></div>
+      </dl>
+
+      <div class="plates">
+        <figure class="plate rise">
+          <img src="{{ url_for('static', filename='img/training/results.png') }}"
+               alt="Loss, precision, recall and mAP curves over 50 training epochs" loading="lazy">
+          <figcaption>Loss and metrics across all 50 epochs.</figcaption>
+        </figure>
+        <figure class="plate rise">
+          <img src="{{ url_for('static', filename='img/training/confusion_matrix_normalized.png') }}"
+               alt="Normalised confusion matrix on the validation split" loading="lazy">
+          <figcaption>Where the remaining errors come from, per class.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== METHOD ===================== -->
+  <section class="section section--well" id="method">
+    <div class="shell">
+      <div class="intro rise">
+        <h2>How a photograph becomes a verdict.</h2>
+      </div>
+
+      <div class="method">
+        <figure class="rise">
+          <img src="{{ url_for('static', filename='img/training/val_batch0_pred.jpg') }}"
+               alt="A batch of validation photographs with the model's predictions drawn on them" loading="lazy">
+        </figure>
+
+        <dl class="spec rise">
+          <div>
+            <dt>Detector</dt>
+            <dd>
+              YOLOv8n fine-tuned for 50 epochs at 640 px on the Coffee Leaf v5 dataset. The
+              class keys live inside the checkpoint, so the weights and the label map cannot
+              drift apart.
+            </dd>
+          </div>
+          <div>
+            <dt>Leaf isolation</dt>
+            <dd>
+              Two green indices — normalised green and excess green — are thresholded with
+              Otsu's method and intersected, then cleaned with morphological opening and
+              closing. That intersection is the crop returned with every detection.
+            </dd>
+          </div>
+          <div>
+            <dt>Runtime</dt>
+            <dd>
+              Serving <strong>{{ weights_name }}</strong> through {{ runtime }}. Ultralytics
+              loads either backend behind the same interface, so the choice is a configuration
+              value rather than a code change.
+            </dd>
+          </div>
+          <div>
+            <dt>Transport</dt>
+            <dd>
+              A Flask app factory with one blueprint. Images are decoded from a byte buffer, so
+              nothing touches the filesystem, and results come back as JSON with the annotated
+              image inlined.
+            </dd>
+          </div>
         </dl>
       </div>
-
-      <figure class="viewport">
-        <img src="{{ url_for('static', filename='img/hero-bg.jpg') }}" alt="Coffee leaves on the plant" width="640" height="480">
-        <div class="bbox bbox--1"><span>coffee_leaf_rust 94%</span></div>
-        <div class="bbox bbox--2 bbox--b"><span>healthy 88%</span></div>
-        <div class="viewport-tag"><b>●</b> YOLOv8n · 640 px · CPU</div>
-      </figure>
     </div>
   </section>
 
-  <!-- ================= PIPELINE ================= -->
-  <section class="section" id="pipeline">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <span class="eyebrow">Pipeline</span>
-        <h2>From photo to field protocol</h2>
-        <p>Three stages, no manual tuning. The detector runs entirely on the Flask server and streams a fully annotated result back to the browser.</p>
-      </div>
-      <div class="steps">
-        <article class="step reveal">
-          <b>01 / CAPTURE</b>
-          <h3>Upload or capture</h3>
-          <p>Drag a photo in, or stream a frame straight from the device camera. PNG, JPG, BMP and WEBP up to {{ max_upload_mb }} MB.</p>
-        </article>
-        <article class="step reveal">
-          <b>02 / ANALYSE</b>
-          <h3>Isolate, then infer</h3>
-          <p>OpenCV builds a green-tissue mask with Otsu thresholding to auto-crop the leaf, then YOLOv8 locates every affected region.</p>
-        </article>
-        <article class="step reveal">
-          <b>03 / ACT</b>
-          <h3>Diagnose and treat</h3>
-          <p>Bounding boxes, confidence scores and the matching treatment protocol for the dominant class are returned as JSON.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= CONSOLE ================= -->
-  <section class="section" id="console">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <span class="eyebrow">Diagnosis console</span>
-        <h2>Run the detector</h2>
-        <p>Everything happens server-side: your image is analysed in memory and never written to disk.</p>
+  <!-- ===================== LIMITS ===================== -->
+  <section class="section" id="limits">
+    <div class="shell">
+      <div class="intro rise">
+        <h2>Where this falls short.</h2>
+        <p>
+          A detector that only reports its best number is not something to trust a crop with.
+        </p>
       </div>
 
-      <div class="console reveal">
-        <div class="console-bar">
-          <div class="dots"><i></i><i></i><i></i></div>
-          <h3>inference: yolov8n · conf 0.25</h3>
-          <span class="status-pill" id="console-status"><i></i> <span>idle</span></span>
+      <div class="limits">
+        <div class="rise">
+          <h3>The boxes are loose</h3>
+          <p>
+            mAP@50 is {{ metrics.map50 }}% but mAP@50-95 is {{ metrics.map50_95 }}%. The model
+            rarely misses a lesion, yet its rectangles are wider than the lesion itself. Read
+            them as “look here”, not as a measured area.
+          </p>
         </div>
-
-        <div class="console-body">
-          <!-- ---- Input ---- -->
-          <div class="pane">
-            <p class="pane-title">Input</p>
-
-            <div class="tabs" role="tablist">
-              <button class="tab is-active" id="tab-upload" role="tab" aria-selected="true" data-mode="upload">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-                Upload
-              </button>
-              <button class="tab" id="tab-camera" role="tab" aria-selected="false" data-mode="camera">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                Camera
-              </button>
-            </div>
-
-            <!-- Upload pane -->
-            <div id="pane-upload">
-              <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Upload a leaf photo">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-                <strong>Drop a leaf photo here</strong>
-                <small>or click to browse · PNG, JPG, BMP, WEBP · max {{ max_upload_mb }} MB</small>
-                <input type="file" id="file-input" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>
-                <div class="preview" id="preview">
-                  <img id="preview-img" alt="Selected leaf preview">
-                  <div class="preview-meta">
-                    <span id="preview-name"></span>
-                    <button type="button" id="preview-clear">Remove</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="samples">
-                <span>No photo handy?</span>
-                <button class="chip" type="button" data-sample="{{ url_for('static', filename='img/samples/phoma_leaf_spot.jpg') }}" data-name="phoma_leaf_spot.jpg">
-                  <img src="{{ url_for('static', filename='img/samples/phoma_leaf_spot.jpg') }}" alt=""> Phoma
-                </button>
-                <button class="chip" type="button" data-sample="{{ url_for('static', filename='img/samples/coffee_leaf_rust.jpg') }}" data-name="coffee_leaf_rust.jpg">
-                  <img src="{{ url_for('static', filename='img/samples/coffee_leaf_rust.jpg') }}" alt=""> Rust
-                </button>
-                <button class="chip" type="button" data-sample="{{ url_for('static', filename='img/samples/leaf_miner.jpg') }}" data-name="leaf_miner.jpg">
-                  <img src="{{ url_for('static', filename='img/samples/leaf_miner.jpg') }}" alt=""> Miner
-                </button>
-              </div>
-            </div>
-
-            <!-- Camera pane -->
-            <div id="pane-camera" hidden>
-              <div class="camera">
-                <video id="camera-video" autoplay playsinline muted></video>
-                <canvas id="camera-canvas" hidden></canvas>
-                <div class="camera-placeholder" id="camera-placeholder">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  <span id="camera-note">Allow camera access to stream a frame.</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="control">
-              <div class="control-head">
-                <label for="conf-range">Confidence threshold</label>
-                <output id="conf-value" for="conf-range">0.25</output>
-              </div>
-              <input type="range" id="conf-range" min="0.05" max="0.95" step="0.05" value="0.25">
-            </div>
-
-            <div class="run-row">
-              <button class="btn btn--primary" id="run-btn" disabled>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-                <span class="spinner" aria-hidden="true"></span>
-                <span class="btn-label">Run detection</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- ---- Output ---- -->
-          <div class="pane">
-            <p class="pane-title">Result</p>
-
-            <div class="result-empty" id="result-empty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 3 4 5-8"/></svg>
-              <span>Run a detection to see bounding boxes,<br>confidence scores and the treatment protocol.</span>
-            </div>
-
-            <div id="result-body" hidden>
-              <figure class="stage">
-                <img id="stage-img" alt="Annotated detection result" data-zoom>
-                <figcaption id="stage-caption">annotated output</figcaption>
-              </figure>
-
-              <div class="thumbs">
-                <figure class="thumb">
-                  <img id="thumb-original" alt="Original upload" data-zoom>
-                  <figcaption>original</figcaption>
-                </figure>
-                <figure class="thumb">
-                  <img id="thumb-crop" alt="Auto-cropped leaf" data-zoom>
-                  <figcaption>auto-crop</figcaption>
-                </figure>
-              </div>
-
-              <div class="stat-grid">
-                <div class="stat"><span>Verdict</span><strong id="stat-verdict">—</strong></div>
-                <div class="stat"><span>Confidence</span><strong id="stat-confidence">—</strong></div>
-                <div class="stat"><span>Detections</span><strong id="stat-count">—</strong></div>
-                <div class="stat"><span>Latency</span><strong id="stat-latency">—</strong></div>
-              </div>
-
-              <div class="verdict" id="verdict">
-                <div class="verdict-top">
-                  <h3 id="verdict-title">—</h3>
-                  <span class="badge is-none" id="verdict-badge">—</span>
-                </div>
-                <p class="pathogen">Pathogen: <b id="verdict-pathogen">—</b></p>
-                <p class="summary" id="verdict-summary"></p>
-                <h4>Observed symptoms</h4>
-                <ul class="checklist checklist--symptom" id="verdict-symptoms"></ul>
-                <h4>Recommended protocol</h4>
-                <ul class="checklist" id="verdict-treatment"></ul>
-              </div>
-
-              <h4 style="font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:22px 0 0;font-weight:500;">Detections</h4>
-              <div class="det-list" id="det-list"></div>
-
-              <div class="result-actions">
-                <button class="btn btn--ghost btn--sm" id="btn-download">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                  Download result
-                </button>
-                <button class="btn btn--ghost btn--sm" id="btn-copy">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
-                  Copy JSON
-                </button>
-                <button class="btn btn--ghost btn--sm" id="btn-reset">New scan</button>
-              </div>
-            </div>
-          </div>
+        <div class="rise">
+          <h3>One dataset, one collection</h3>
+          <p>
+            Training used 3,992 photographs from a single Roboflow collection. Accuracy on other
+            cultivars, altitudes or phone cameras is unknown rather than guaranteed.
+          </p>
         </div>
-
-        <div class="history">
-          <div class="history-head">
-            <h4>Recent scans</h4>
-            <button type="button" id="history-clear">Clear</button>
-          </div>
-          <div class="history-rail" id="history-rail"></div>
+        <div class="rise">
+          <h3>Not an agronomist</h3>
+          <p>
+            The protocol text is generic guidance for each class. It knows nothing about your
+            planting density, fungicide rotation, or resistance in your block. Confirm with an
+            extension officer before spraying.
+          </p>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= LIBRARY ================= -->
-  <section class="section" id="library">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <span class="eyebrow">Knowledge base</span>
-        <h2>Supported classes</h2>
-        <p>The four labels the model was trained on, with the pathogen behind each one and the protocol returned by the API.</p>
-      </div>
-      <div class="library">
-        {% for key, info in diseases.items() %}
-        <article class="leaf-card reveal">
-          <span style="color: {{ severity_color[info.severity] }}">{{ leaf_icon(key) }}</span>
-          <span class="badge is-{{ info.severity }}">{{ info.status }}</span>
-          <h3>{{ info.label }}</h3>
-          <p class="pathogen">{{ info.pathogen }}</p>
-          <p>{{ info.summary }}</p>
-          <p class="symptom"><strong style="color:var(--muted);font-weight:500;">Watch for:</strong> {{ info.symptoms[0] }}</p>
-        </article>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
-
-  <!-- ================= METRICS ================= -->
-  <section class="section" id="metrics">
-    <div class="wrap">
-      <div class="section-head reveal">
-        <span class="eyebrow">Model card</span>
-        <h2>Validation metrics</h2>
-        <p>YOLOv8n fine-tuned for 50 epochs at 640 px on the Roboflow <em>Coffee Leaf v5</em> dataset (3,493 train / 333 val / 166 test images). Figures are the final validation epoch.</p>
-      </div>
-
-      <div class="kpi-grid reveal">
-        <div class="kpi"><strong>{{ metrics.precision }}%</strong><span>Precision</span><div class="meter"><i style="width:{{ metrics.precision }}%"></i></div></div>
-        <div class="kpi"><strong>{{ metrics.recall }}%</strong><span>Recall</span><div class="meter"><i style="width:{{ metrics.recall }}%"></i></div></div>
-        <div class="kpi"><strong>{{ metrics.f1_score }}%</strong><span>F1 score</span><div class="meter"><i style="width:{{ metrics.f1_score }}%"></i></div></div>
-        <div class="kpi"><strong>{{ metrics.map50 }}%</strong><span>mAP@50</span><div class="meter"><i style="width:{{ metrics.map50 }}%"></i></div></div>
-        <div class="kpi"><strong>{{ metrics.map50_95 }}%</strong><span>mAP@50-95</span><div class="meter"><i style="width:{{ metrics.map50_95 }}%"></i></div></div>
-      </div>
-
-      <div class="charts">
-        <figure class="chart reveal">
-          <img src="{{ url_for('static', filename='img/training/results.png') }}" alt="Training and validation loss and metric curves" loading="lazy">
-          <figcaption>Loss and metric curves over 50 epochs.</figcaption>
-        </figure>
-        <figure class="chart reveal">
-          <img src="{{ url_for('static', filename='img/training/confusion_matrix_normalized.png') }}" alt="Normalised confusion matrix" loading="lazy">
-          <figcaption>Normalised confusion matrix on the validation split.</figcaption>
-        </figure>
       </div>
     </div>
   </section>
 </main>
 
 <footer class="footer">
-  <div class="wrap footer-inner">
-    <span>Coffee Leaf Disease Detection v{{ config.get('APP_VERSION', '2.0.0') }} — built by Glen Devit Renaldi.</span>
-    <nav>
-      <a href="/health">/health</a>
-      <a href="#console">Console</a>
-      <a href="#metrics">Metrics</a>
-    </nav>
+  <div class="shell">
+    <p class="footer__name rise">Coffee leaf disease detection.</p>
+    <div class="footer__meta">
+      <span>Built by Glen Devit Renaldi · MIT licensed</span>
+      <span>YOLOv8 · OpenCV · Flask</span>
+      <nav aria-label="Footer">
+        <a href="#console">Detector</a>
+        <a href="#evidence">Evidence</a>
+        <a href="/health">/health</a>
+        <a href="/api/stats">/api/stats</a>
+      </nav>
+    </div>
   </div>
 </footer>
 
-<div id="toasts" aria-live="polite" aria-atomic="true"></div>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="true"></div>
 
-<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Image viewer">
-  <button type="button" id="lightbox-close" aria-label="Close viewer">✕</button>
-  <img id="lightbox-img" alt="Enlarged image">
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged image">
+  <button type="button" id="lightbox-close" aria-label="Close">✕</button>
+  <img id="lightbox-img" src="" alt="">
 </div>
 
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ asset('js/app.js') }}" defer></script>
 </body>
 </html>

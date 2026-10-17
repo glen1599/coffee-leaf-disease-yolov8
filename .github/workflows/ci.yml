@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, type-check and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies (CPU-only torch)
+        run: |
+          uv venv --python 3.11
+          uv pip install --extra-index-url https://download.pytorch.org/whl/cpu torch torchvision
+          uv pip install -r requirements.txt
+          uv pip install pytest ruff mypy
+
+      - name: Ruff
+        run: .venv/bin/ruff check .
+
+      - name: Ruff format check
+        run: .venv/bin/ruff format --check .
+
+      - name: Mypy
+        run: .venv/bin/mypy
+
+      - name: Pytest
+        run: .venv/bin/pytest -q
