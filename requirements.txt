@@ -1,0 +1,12 @@
+# Core web framework
+Flask>=3.0,<4.0
+
+# Computer vision + numeric stack (OpenCV is used for decode, auto-crop and annotate)
+numpy>=1.26
+opencv-python>=4.9
+
+# Object detection. Ultralytics pulls in PyTorch and torchvision automatically.
+ultralytics>=8.3,<9.0
+
+# Production WSGI server (optional locally, required for deployment)
+gunicorn>=22.0
