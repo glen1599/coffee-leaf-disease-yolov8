@@ -262,6 +262,8 @@ yolo export model=models/best.pt format=onnx opset=12 simplify=True
 ```
 
 Re-run the benchmark before quoting any of these numbers on other hardware.
+The first request after a cold boot costs ~0.5 s while ONNX Runtime specialises
+its kernels; everything after that is the ~20 ms above.
 
 | Curves | Confusion matrix |
 | --- | --- |
