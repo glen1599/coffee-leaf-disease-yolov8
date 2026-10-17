@@ -25,7 +25,9 @@ models/yolov8n.pt
 models/best.onnx
 runs/
 runs.zip
-datasets/
+# Dataset bytes stay local, but the provenance note is documentation and ships.
+datasets/*
+!datasets/README.md
 uploads/
 weights/
 

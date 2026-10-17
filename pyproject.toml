@@ -60,5 +60,8 @@ follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Make the package importable for the bare `pytest` entrypoint too:
+# `python -m pytest` adds the CWD to sys.path, the console script does not.
+pythonpath = ["."]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
