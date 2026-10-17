@@ -1,0 +1,17 @@
+{
+  "name": "Coffee Leaf Disease Detection",
+  "short_name": "CoffeeLeaf AI",
+  "description": "YOLOv8-powered detection of coffee leaf disease from a single photo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a09",
+  "theme_color": "#070a09",
+  "icons": [
+    {
+      "src": "/static/img/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ]
+}
