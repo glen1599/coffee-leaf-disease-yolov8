@@ -6,7 +6,7 @@
 
 A YOLOv8 detector served by Flask and OpenCV, with an honest model card.
 
-[![CI](https://github.com/YOUR-USERNAME/coffee-leaf-disease-yolov8/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR-USERNAME/coffee-leaf-disease-yolov8/actions/workflows/ci.yml)
+[![CI](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml/badge.svg)](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)
 ![YOLOv8](https://img.shields.io/badge/Ultralytics-YOLOv8-111F68)
@@ -88,6 +88,56 @@ repository, so a fresh clone answers requests in under a minute.
 
 - 31 tests covering the API contract, the auto-crop maths, rate limiting and config invariants.
 - `ruff` (lint + format) and `mypy` clean; all three run in CI.
+
+## System Architecture & Preprocessing Pipeline
+
+```mermaid
+flowchart LR
+    A["Photograph<br/>upload · drag-drop · camera"] --> B{"Validation<br/>extension · 10 MB · pixels"}
+    B -->|rejected| E["JSON error<br/>400 / 413 / 429"]
+    B -->|accepted| C["Decode in memory<br/>cv2.imdecode"]
+    C --> D["Leaf isolation<br/>Otsu on NG ∩ ExG"]
+    D --> F["YOLOv8n inference<br/>640 px · conf threshold"]
+    F --> G["Annotate and encode JPEG"]
+    G --> H["Knowledge base lookup<br/>severity · symptoms · protocol"]
+    H --> I["JSON response<br/>boxes · confidence · latency"]
+    I --> J["Dashboard render<br/>workbench · rail · zoom"]
+    F -.-> K[("SQLite<br/>anonymous scan log")]
+```
+
+**1 — Input.** Three entry points feed one pipeline: `POST /predict` (one file),
+`POST /predict/batch` (up to 8), `POST /predict/camera` (a base64 frame).
+
+**2 — Validation.** The extension is checked against an allow-list, the body
+against `MAX_CONTENT_LENGTH`, and the request against a per-IP sliding window
+before any pixel is touched. OpenCV itself refuses images above
+`MAX_IMAGE_PIXELS` (40 MP), which is the decompression-bomb guard.
+
+**3 — Decoding.** Bytes go straight into `cv2.imdecode` from a `numpy` buffer.
+Nothing is written to disk, so there is no temp-file cleanup and no path
+handling to get wrong.
+
+**4 — Preprocessing (leaf isolation).** Two independent green indices are built
+from the BGR channels — *normalised green* `G / (R+G+B)` and *excess green*
+`2G − R − B` — each stretched to the full `uint8` range, thresholded with
+Otsu's method and then intersected. Intersecting two indices is what makes the
+mask survive changing light where a fixed HSV range would not. Morphological
+closing/opening removes speckle, the largest external contour is taken, and a
+region under 3 % of the frame is treated as noise and the original image is
+returned. The result is the tight crop shipped with every response.
+
+**5 — Detection.** YOLOv8n runs at 640 px and returns boxes, class indices and
+confidences. The highest-confidence detection across the frame becomes the
+verdict; every box is kept for the table.
+
+**6 — Post-processing.** Boxes are drawn and the frame is JPEG-encoded to a data
+URI at `JPEG_QUALITY`. The verdict is joined against the knowledge base in
+`coffee_leaf/config.py`, which supplies severity, pathogen, symptoms and the
+treatment protocol.
+
+**7 — Presentation.** The JSON goes back to the dashboard, which renders the
+annotated frame, the verdict, the per-detection confidence meter and the
+protocol — and keeps the last scans in the browser rail.
 
 ## Tech Stack
 
@@ -352,5 +402,6 @@ Code and weights: [MIT](LICENSE). Dataset: CC BY 4.0, by its original authors.
 
 ## Author
 
-**Glen Devit Renaldi** — machine learning and full-stack engineering.
-Issues and pull requests are welcome.
+**Glen Devit Renaldi** — [@glen1599](https://github.com/glen1599)
+
+Machine learning and full-stack engineering. Issues and pull requests are welcome.

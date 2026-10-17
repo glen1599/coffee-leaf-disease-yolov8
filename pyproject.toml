@@ -28,7 +28,8 @@ dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11"]
 export = ["onnx>=1.16", "onnxslim>=0.1.82"]
 
 [project.urls]
-Homepage = "https://github.com/your-username/coffee-leaf-disease-yolov8"
+Homepage = "https://github.com/glen1599/coffee-leaf-disease-yolov8"
+Issues = "https://github.com/glen1599/coffee-leaf-disease-yolov8/issues"
 
 [tool.uv]
 package = false
