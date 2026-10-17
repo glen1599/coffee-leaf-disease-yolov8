@@ -15,17 +15,20 @@ from .config import (
     ALLOWED_EXTENSIONS,
     CLASS_LABELS,
     DISEASE_INFO,
+    MAX_BATCH_FILES,
     MAX_CONTENT_LENGTH,
     MODEL_METRICS,
+    SAMPLES,
 )
 from .detector import LeafDetector
 from .ratelimit import rate_limit
+from .store import Store
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
 
-# Upper bound for a single base64 camera frame (the client sends JPEG).
+# Upper bound for a single base64 camera frame.
 MAX_FRAME_BYTES = 8 * 1024 * 1024
 
 
@@ -34,13 +37,22 @@ def _detector() -> LeafDetector:
     return current_app.extensions["detector"]
 
 
+def _store() -> Store:
+    """Return the process-wide SQLite store created by the app factory."""
+    return current_app.extensions["store"]
+
+
 def _is_allowed(filename: str) -> bool:
     """Check the file extension against the allow-list."""
     return "." in filename and filename.rsplit(".", 1)[-1].lower() in ALLOWED_EXTENSIONS
 
 
 def _decode_image(payload: bytes) -> np.ndarray | None:
-    """Decode raw image bytes into a BGR array, or ``None`` when invalid."""
+    """Decode raw image bytes into a BGR array, or ``None`` when unusable.
+
+    Images above ``MAX_IMAGE_PIXELS`` are refused by OpenCV itself, which is
+    the decompression-bomb guard configured in ``coffee_leaf.config``.
+    """
     buffer = np.frombuffer(payload, dtype=np.uint8)
     return cv2.imdecode(buffer, cv2.IMREAD_COLOR)
 
@@ -55,24 +67,34 @@ def _resolve_confidence(raw: Any) -> float | None:
         return None
 
 
-def _enrich(result: dict[str, Any]) -> dict[str, Any]:
-    """Attach display labels and the disease knowledge base to a result."""
+def _enrich(result: dict[str, Any], source: str) -> dict[str, Any]:
+    """Attach display labels, the knowledge base and log the anonymous scan."""
     for detection in result["detections"]:
-        detection["label_text"] = CLASS_LABELS.get(
-            detection["label"], detection["label"]
-        )
-    result["info"] = DISEASE_INFO.get(result["dominant_class"])
+        detection["label_text"] = CLASS_LABELS.get(detection["label"], detection["label"])
+    info = DISEASE_INFO.get(result["dominant_class"])
+    result["info"] = info
+    result["severity"] = info["severity"] if info else "unknown"
+
+    top = max((d["confidence"] for d in result["detections"]), default=0.0)
+    _store().record_scan(
+        label=result["dominant_class"],
+        confidence=top,
+        detections=result["total_detections"],
+        latency_ms=result["inference_ms"],
+        source=source,
+    )
     return result
 
 
-def _infer(image: np.ndarray, conf: float | None):
+def _infer(image: np.ndarray, conf: float | None, source: str):
     """Run inference and translate failures into HTTP responses."""
     try:
-        return jsonify(_enrich(_detector().predict(image, conf=conf))), 200
+        result = _detector().predict(image, conf=conf)
+        return jsonify(_enrich(result, source)), 200
     except MemoryError:
         logger.exception("Out of memory during inference")
         return jsonify({"error": "Server ran out of memory. Try a smaller image."}), 500
-    except Exception:  # noqa: BLE001 - never leak internals to the client
+    except Exception:
         logger.exception("Inference failed")
         return jsonify({"error": "Internal inference error. Please try again."}), 500
 
@@ -80,12 +102,18 @@ def _infer(image: np.ndarray, conf: float | None):
 @bp.get("/")
 def index():
     """Render the single-page application shell."""
+    detector = _detector()
     return render_template(
         "index.html",
         metrics=MODEL_METRICS,
         diseases=DISEASE_INFO,
         class_labels=CLASS_LABELS,
+        samples={key: f"img/samples/{path.split('/')[-1]}" for key, path in SAMPLES.items()},
         max_upload_mb=MAX_CONTENT_LENGTH // (1024 * 1024),
+        max_batch=MAX_BATCH_FILES,
+        runtime=detector.runtime,
+        weights_name=detector.weights_used.split("/")[-1],
+        using_fallback=detector.used_fallback,
     )
 
 
@@ -98,10 +126,17 @@ def health():
             "status": "ok",
             "version": current_app.config["APP_VERSION"],
             "weights": detector.weights_used,
+            "runtime": detector.runtime,
             "using_fallback_weights": detector.used_fallback,
             "classes": detector.classes,
         }
     )
+
+
+@bp.get("/api/stats")
+def stats():
+    """Aggregate activity for the dashboard panel (anonymous counts only)."""
+    return jsonify(_store().stats())
 
 
 @bp.post("/predict")
@@ -117,9 +152,40 @@ def predict():
 
     image = _decode_image(file.read())
     if image is None:
-        return jsonify({"error": "The uploaded file is not a valid image."}), 400
+        return jsonify({"error": "The uploaded file is not a decodable image."}), 400
 
-    return _infer(image, _resolve_confidence(request.form.get("conf")))
+    return _infer(image, _resolve_confidence(request.form.get("conf")), "upload")
+
+
+@bp.post("/predict/batch")
+@rate_limit
+def predict_batch():
+    """Classify several uploaded images in one request."""
+    files = [f for f in request.files.getlist("files") if f and f.filename]
+    if not files:
+        return jsonify({"error": "No image files were uploaded."}), 400
+    if len(files) > MAX_BATCH_FILES:
+        return jsonify({"error": f"At most {MAX_BATCH_FILES} images can be analysed at once."}), 400
+
+    conf = _resolve_confidence(request.form.get("conf"))
+    items: list[dict[str, Any]] = []
+    for file in files:
+        if not _is_allowed(file.filename):
+            items.append({"filename": file.filename, "error": "Unsupported format."})
+            continue
+        image = _decode_image(file.read())
+        if image is None:
+            items.append({"filename": file.filename, "error": "Not a decodable image."})
+            continue
+        try:
+            payload = _enrich(_detector().predict(image, conf=conf), "batch")
+            payload["filename"] = file.filename
+        except Exception:
+            logger.exception("Batch item failed: %s", file.filename)
+            payload = {"filename": file.filename, "error": "Inference failed."}
+        items.append(payload)
+
+    return jsonify({"count": len(items), "items": items}), 200
 
 
 @bp.post("/predict/camera")
@@ -143,4 +209,4 @@ def predict_camera():
     if image is None:
         return jsonify({"error": "The camera frame could not be decoded."}), 400
 
-    return _infer(image, _resolve_confidence(payload.get("conf")))
+    return _infer(image, _resolve_confidence(payload.get("conf")), "camera")

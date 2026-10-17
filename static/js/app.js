@@ -1,167 +1,227 @@
 /**
  * Coffee Leaf Disease Detection — front-end controller.
- * Talks to the Flask API: POST /predict (multipart) and POST /predict/camera (JSON).
+ *
+ * Talks to the Flask API: POST /predict (one file), POST /predict/batch
+ * (several), POST /predict/camera (base64 frame), GET /api/stats.
  */
 (() => {
   "use strict";
 
   const MAX_BYTES = 10 * 1024 * 1024;
-  const HISTORY_KEY = "coffee_leaf_history_v2";
-  const HISTORY_LIMIT = 10;
+  const MAX_FILES = 8;
+  const HISTORY_KEY = "coffee_leaf_history_v3";
+  const HISTORY_LIMIT = 8;
+  const STAGGER_MS = 70;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
-  const state = {
-    mode: "upload",
-    file: null,
-    source: null, // ObjectURL / data URL currently previewed
-    stream: null,
-    result: null,
-  };
+  const state = { mode: "upload", files: [], objectUrl: null, stream: null, result: null, batch: [] };
 
-  /* ------------------------------------------------------------------ toasts */
+  /* ---------------------------------------------------------------- toasts */
   function toast(message, kind = "info") {
     const host = $("#toasts");
-    if (!host) return;
     const el = document.createElement("div");
-    el.className = `toast toast--${kind}`;
+    el.className = "toast";
+    el.dataset.kind = kind;
     el.textContent = message;
     host.appendChild(el);
-    requestAnimationFrame(() => el.classList.add("is-visible"));
+    requestAnimationFrame(() => (el.dataset.visible = ""));
     setTimeout(() => {
-      el.classList.remove("is-visible");
-      setTimeout(() => el.remove(), 300);
+      delete el.dataset.visible;
+      setTimeout(() => el.remove(), 340);
     }, 4200);
   }
 
-  /* ----------------------------------------------------------------- header */
-  const header = $("#site-header");
-  const onScroll = () => header.classList.toggle("is-stuck", window.scrollY > 12);
+  /* ------------------------------------------------- entrances (staggered) */
+  function armRisers() {
+    const risers = $$(".rise");
+    if (!("IntersectionObserver" in window)) {
+      risers.forEach((el) => (el.dataset.shown = ""));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let step = 0;
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.style.setProperty("--delay", `${step++ * STAGGER_MS}ms`);
+          entry.target.dataset.shown = "";
+          observer.unobserve(entry.target);
+        });
+      },
+      { rootMargin: "0px 0px -6% 0px", threshold: 0.06 }
+    );
+    risers.forEach((el) => observer.observe(el));
+  }
+
+  /* ------------------------------------------------------------------ nav */
+  const nav = $("#nav");
+  const onScroll = () => {
+    if (window.scrollY > 8) nav.dataset.stuck = "";
+    else delete nav.dataset.stuck;
+  };
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
   $("#nav-toggle").addEventListener("click", (event) => {
-    const open = header.classList.toggle("is-open");
+    const open = nav.toggleAttribute("data-open");
     event.currentTarget.setAttribute("aria-expanded", String(open));
   });
-  $$(".nav-links a").forEach((link) =>
-    link.addEventListener("click", () => header.classList.remove("is-open"))
-  );
-
-  /* ------------------------------------------------------------ reveal on scroll */
-  const revealObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          revealObserver.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.12 }
-  );
-  $$(".reveal").forEach((el) => revealObserver.observe(el));
-
-  /* -------------------------------------------------------------------- tabs */
-  $$(".tab").forEach((tab) =>
-    tab.addEventListener("click", async () => {
-      state.mode = tab.dataset.mode;
-      $$(".tab").forEach((other) => {
-        const active = other === tab;
-        other.classList.toggle("is-active", active);
-        other.setAttribute("aria-selected", String(active));
-      });
-      $("#pane-upload").hidden = state.mode !== "upload";
-      $("#pane-camera").hidden = state.mode !== "camera";
-      if (state.mode === "camera") await startCamera();
-      else stopCamera();
-      syncRunButton();
+  $$(".nav__links a").forEach((link) =>
+    link.addEventListener("click", () => {
+      delete nav.dataset.open;
+      $("#nav-toggle").setAttribute("aria-expanded", "false");
     })
   );
 
-  /* --------------------------------------------------------------- confidence */
-  const range = $("#conf-range");
-  const rangeOutput = $("#conf-value");
-  function paintRange() {
-    const pct = ((range.value - range.min) / (range.max - range.min)) * 100;
-    range.style.setProperty("--fill", `${pct}%`);
-    rangeOutput.textContent = Number(range.value).toFixed(2);
-  }
-  range.addEventListener("input", paintRange);
-  paintRange();
+  /* ---------------------------------------------------------------- theme */
+  $("#nav-theme").addEventListener("click", () => {
+    const root = document.documentElement;
+    const system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const next = (root.dataset.theme || system) === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem("coffee_leaf_theme", next);
+    } catch {
+      /* private mode */
+    }
+  });
 
-  /* ------------------------------------------------------------------ upload */
-  const dropzone = $("#dropzone");
+  /* ------------------------------------------------ compare (1:1 tracking) */
+  const compare = $("#compare");
+  const handle = $("#compare-handle");
+
+  function setSplit(clientX) {
+    const rect = compare.getBoundingClientRect();
+    const percent = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+    compare.style.setProperty("--split", `${percent.toFixed(2)}%`);
+    handle.setAttribute("aria-valuenow", String(Math.round(percent)));
+  }
+
+  compare.addEventListener("pointerdown", (event) => {
+    compare.setPointerCapture(event.pointerId);
+    compare.dataset.dragging = "";
+    setSplit(event.clientX);
+  });
+  compare.addEventListener("pointermove", (event) => {
+    if (compare.dataset.dragging !== undefined) setSplit(event.clientX);
+  });
+  ["pointerup", "pointercancel"].forEach((type) =>
+    compare.addEventListener(type, () => delete compare.dataset.dragging)
+  );
+  handle.addEventListener("keydown", (event) => {
+    const step = event.key === "ArrowLeft" ? -5 : event.key === "ArrowRight" ? 5 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const next = Math.min(100, Math.max(0, Number(handle.getAttribute("aria-valuenow")) + step));
+    compare.style.setProperty("--split", `${next}%`);
+    handle.setAttribute("aria-valuenow", String(next));
+  });
+
+  /* ------------------------------------------------------- mode selection */
+  const segmented = $("#segmented");
+  $$("#segmented button").forEach((tab, index) =>
+    tab.addEventListener("click", async () => {
+      state.mode = index === 0 ? "upload" : "camera";
+      segmented.dataset.active = String(index);
+      $$("#segmented button").forEach((other) =>
+        other.setAttribute("aria-selected", String(other === tab))
+      );
+      $("#pane-upload").hidden = index !== 0;
+      $("#pane-camera").hidden = index === 0;
+      if (index === 0) stopCamera();
+      else await startCamera();
+      syncRun();
+    })
+  );
+
+  /* ------------------------------------------------------------ threshold */
+  const conf = $("#conf");
+  function paintConfidence() {
+    const percent = ((conf.value - conf.min) / (conf.max - conf.min)) * 100;
+    conf.style.setProperty("--fill", `${percent}%`);
+    $("#conf-out").textContent = Number(conf.value).toFixed(2);
+  }
+  conf.addEventListener("input", paintConfidence);
+  paintConfidence();
+
+  /* --------------------------------------------------------------- upload */
+  const drop = $("#drop");
   const fileInput = $("#file-input");
-  const preview = $("#preview");
 
-  function setPreview(src, name) {
-    $("#preview-img").src = src;
-    $("#preview-name").textContent = name;
-    dropzone.classList.add("has-preview");
-    preview.style.display = "block";
-    dropzone.querySelectorAll(":scope > :not(.preview)").forEach((el) => (el.style.display = "none"));
+  function showPreview() {
+    if (!state.files.length) return;
+    const [first] = state.files;
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = URL.createObjectURL(first);
+    $("#preview-img").src = state.objectUrl;
+    $("#preview-name").textContent =
+      state.files.length === 1
+        ? `${first.name} · ${Math.round(first.size / 1024)} KB`
+        : `${first.name} and ${state.files.length - 1} more`;
+    drop.dataset.filled = "";
   }
 
-  function clearPreview() {
-    if (state.source && state.source.startsWith("blob:")) URL.revokeObjectURL(state.source);
-    state.file = null;
-    state.source = null;
+  function setFiles(list) {
+    const accepted = [];
+    for (const file of list) {
+      if (!file.type.startsWith("image/")) {
+        toast(`${file.name} is not an image.`, "warning");
+        continue;
+      }
+      if (file.size > MAX_BYTES) {
+        toast(`${file.name} is larger than 10 MB.`, "warning");
+        continue;
+      }
+      accepted.push(file);
+    }
+    if (accepted.length > MAX_FILES) {
+      toast(`Only the first ${MAX_FILES} photographs are used.`, "warning");
+      accepted.length = MAX_FILES;
+    }
+    if (!accepted.length) return;
+    state.files = accepted;
+    showPreview();
+    syncRun();
+  }
+
+  function clearFiles() {
+    state.files = [];
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = null;
     $("#preview-img").removeAttribute("src");
-    dropzone.classList.remove("has-preview");
-    preview.style.display = "none";
-    dropzone.querySelectorAll(":scope > :not(.preview)").forEach((el) => (el.style.display = ""));
+    delete drop.dataset.filled;
     fileInput.value = "";
-    syncRunButton();
+    syncRun();
   }
 
-  function acceptFile(file) {
-    if (!file.type.startsWith("image/")) {
-      toast("Only image files are supported.", "warning");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      toast("That image is larger than the 10 MB limit.", "warning");
-      return;
-    }
-    state.file = file;
-    state.source = URL.createObjectURL(file);
-    setPreview(state.source, `${file.name} · ${(file.size / 1024).toFixed(0)} KB`);
-    syncRunButton();
-  }
-
-  dropzone.addEventListener("click", (event) => {
+  drop.addEventListener("click", (event) => {
     if (!event.target.closest("#preview")) fileInput.click();
   });
-  dropzone.addEventListener("keydown", (event) => {
+  drop.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       fileInput.click();
     }
   });
   ["dragenter", "dragover"].forEach((type) =>
-    dropzone.addEventListener(type, (event) => {
+    drop.addEventListener(type, (event) => {
       event.preventDefault();
-      dropzone.classList.add("is-drag");
+      drop.dataset.drag = "";
     })
   );
   ["dragleave", "drop"].forEach((type) =>
-    dropzone.addEventListener(type, (event) => {
+    drop.addEventListener(type, (event) => {
       event.preventDefault();
-      dropzone.classList.remove("is-drag");
+      delete drop.dataset.drag;
     })
   );
-  dropzone.addEventListener("drop", (event) => {
-    const file = event.dataTransfer?.files?.[0];
-    if (file) acceptFile(file);
-  });
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files[0]) acceptFile(fileInput.files[0]);
-  });
+  drop.addEventListener("drop", (event) => setFiles(event.dataTransfer?.files ?? []));
+  fileInput.addEventListener("change", () => setFiles(fileInput.files));
   $("#preview-clear").addEventListener("click", (event) => {
     event.stopPropagation();
-    clearPreview();
+    clearFiles();
   });
 
   $$("[data-sample]").forEach((chip) =>
@@ -169,22 +229,20 @@
       try {
         const response = await fetch(chip.dataset.sample);
         const blob = await response.blob();
-        acceptFile(new File([blob], chip.dataset.name, { type: blob.type || "image/jpeg" }));
+        setFiles([new File([blob], chip.dataset.name, { type: blob.type || "image/jpeg" })]);
       } catch {
-        toast("Could not load the sample image.", "error");
+        toast("Could not load that sample photograph.", "error");
       }
     })
   );
 
-  /* ------------------------------------------------------------------ camera */
+  /* --------------------------------------------------------------- camera */
   const video = $("#camera-video");
-  const placeholder = $("#camera-placeholder");
 
   async function startCamera() {
     if (state.stream) return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      $("#camera-note").textContent = "This browser does not expose a camera API.";
-      toast("Camera API is unavailable in this browser.", "warning");
+      $("#camera-note").textContent = "This browser exposes no camera API.";
       return;
     }
     try {
@@ -192,12 +250,11 @@
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 960 } },
       });
       video.srcObject = state.stream;
-      placeholder.classList.add("is-hidden");
-      $("#camera-note").textContent = "Camera streaming.";
+      $("#camera-placeholder").hidden = true;
     } catch {
       toast("Camera access was denied by the browser.", "warning");
     }
-    syncRunButton();
+    syncRun();
   }
 
   function stopCamera() {
@@ -205,7 +262,7 @@
     state.stream.getTracks().forEach((track) => track.stop());
     state.stream = null;
     video.srcObject = null;
-    placeholder.classList.remove("is-hidden");
+    $("#camera-placeholder").hidden = false;
   }
 
   function captureFrame() {
@@ -217,150 +274,197 @@
     return canvas.toDataURL("image/jpeg", 0.9);
   }
 
-  /* -------------------------------------------------------------------- run */
-  const runButton = $("#run-btn");
-  const consoleStatus = $("#console-status");
+  /* ------------------------------------------------------------------ run */
+  const runButton = $("#run");
+  const runLabel = $("#run-label");
 
-  function syncRunButton() {
-    const ready = state.mode === "camera" ? Boolean(state.stream) : Boolean(state.file);
+  function syncRun() {
+    const ready = state.mode === "camera" ? Boolean(state.stream) : state.files.length > 0;
     runButton.disabled = !ready;
+    runLabel.textContent =
+      state.mode === "upload" && state.files.length > 1
+        ? `Run detection on ${state.files.length} photographs`
+        : "Run detection";
   }
 
   function setBusy(busy) {
-    runButton.classList.toggle("is-loading", busy);
+    runButton.classList.toggle("is-busy", busy);
     runButton.disabled = busy;
-    consoleStatus.querySelector("span").textContent = busy ? "analysing…" : "idle";
-    if (!busy) syncRunButton();
+    if (!busy) syncRun();
   }
 
   runButton.addEventListener("click", async () => {
-    if (state.mode === "camera" && !state.stream) {
-      toast("The camera is not streaming yet.", "warning");
-      return;
-    }
-
     setBusy(true);
-    const conf = Number(range.value);
     try {
-      let response;
-      if (state.mode === "camera") {
-        const frame = captureFrame();
-        if (!frame) throw new Error("empty-frame");
-        response = await fetch("/predict/camera", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: frame, conf }),
-        });
-      } else {
-        const body = new FormData();
-        body.append("file", state.file, state.file.name);
-        body.append("conf", String(conf));
-        response = await fetch("/predict", { method: "POST", body });
-      }
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload || payload.error) {
-        toast(payload?.error || `The server returned HTTP ${response.status}.`, "error");
-        return;
-      }
-      renderResult(payload);
-      saveHistory(payload);
-    } catch (error) {
-      toast(
-        error.message === "empty-frame"
-          ? "The camera frame is still empty. Try again in a moment."
-          : "Could not reach the server. Is it still running?",
-        "error"
-      );
+      if (state.mode === "camera") await runCamera();
+      else if (state.files.length === 1) await runSingle(state.files[0]);
+      else await runBatch();
+    } catch {
+      toast("Could not reach the server. Is it still running?", "error");
     } finally {
       setBusy(false);
     }
   });
 
-  /* ---------------------------------------------------------------- render */
+  async function readJson(response) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.error) {
+      toast(payload?.error ?? `The server answered HTTP ${response.status}.`, "error");
+      return null;
+    }
+    return payload;
+  }
+
+  async function runSingle(file) {
+    const body = new FormData();
+    body.append("file", file, file.name);
+    body.append("conf", conf.value);
+    const payload = await readJson(await fetch("/predict", { method: "POST", body }));
+    if (!payload) return;
+    state.batch = [];
+    renderQueue();
+    renderResult(payload);
+    saveHistory(payload);
+  }
+
+  async function runBatch() {
+    const body = new FormData();
+    state.files.forEach((file) => body.append("files", file, file.name));
+    body.append("conf", conf.value);
+    const payload = await readJson(await fetch("/predict/batch", { method: "POST", body }));
+    if (!payload) return;
+
+    state.batch = payload.items;
+    renderQueue();
+    const first = payload.items.find((item) => !item.error);
+    if (first) renderResult(first);
+    const failed = payload.items.filter((item) => item.error).length;
+    toast(
+      `${payload.count - failed} of ${payload.count} photographs analysed${failed ? `, ${failed} failed` : ""}.`,
+      failed ? "warning" : "success"
+    );
+  }
+
+  async function runCamera() {
+    const frame = captureFrame();
+    if (!frame) {
+      toast("The camera frame is empty. Try again in a moment.", "warning");
+      return;
+    }
+    const payload = await readJson(
+      await fetch("/predict/camera", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: frame, conf: Number(conf.value) }),
+      })
+    );
+    if (!payload) return;
+    renderResult(payload);
+    saveHistory(payload);
+  }
+
+  /* --------------------------------------------------------------- render */
   function meterKind(detection) {
     if (detection.label === "sehat") return "";
-    if (detection.confidence >= 70) return "is-high";
-    if (detection.confidence >= 40) return "is-moderate";
+    if (detection.confidence >= 70) return "high";
+    if (detection.confidence >= 40) return "moderate";
     return "";
   }
 
   function fillList(element, items) {
-    element.innerHTML = "";
-    items.forEach((text) => {
-      const li = document.createElement("li");
-      li.textContent = text;
-      element.appendChild(li);
-    });
+    element.replaceChildren(
+      ...items.map((text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        return li;
+      })
+    );
   }
 
-  function renderResult(payload, options = {}) {
+  function renderResult(payload) {
     state.result = payload;
-
     $("#result-empty").hidden = true;
     $("#result-body").hidden = false;
 
-    $("#stage-img").src = payload.annotated_image;
-    $("#thumb-original").src = payload.original_image || payload.annotated_image;
-    $("#thumb-crop").src = payload.cropped_image || payload.annotated_image;
-    $("#stage-caption").textContent = `${payload.frame.width}×${payload.frame.height} px · ${payload.total_detections} detection(s) · ${payload.inference_ms} ms`;
-
+    $("#shot-img").src = payload.annotated_image;
     const info = payload.info;
-    const dominant = payload.dominant_class;
+    $("#shot-meta").textContent = `${payload.frame.width}×${payload.frame.height} px · ${payload.total_detections} detection(s) · ${payload.inference_ms} ms`;
+
     const top = payload.detections.reduce(
-      (best, detection) => (best === null || detection.confidence > best.confidence ? detection : best),
+      (best, detection) => (!best || detection.confidence > best.confidence ? detection : best),
       null
     );
 
-    const verdictEl = $("#stat-verdict");
-    verdictEl.textContent = info?.label || dominant || "—";
-    verdictEl.className = info ? `is-${info.severity}` : "";
+    $("#verdict-title").textContent = info?.label ?? payload.dominant_class ?? "Nothing detected";
+    const pill = $("#verdict-pill");
+    pill.textContent = info?.status ?? "No detection";
+    pill.className = `pill pill--${info?.severity ?? "none"}`;
+    $("#verdict-pathogen").textContent = info ? `Caused by ${info.pathogen}` : "";
+    $("#verdict-summary").textContent = info?.summary ?? "";
+    fillList($("#verdict-symptoms"), info?.symptoms ?? []);
+    fillList($("#verdict-treatment"), info?.treatment ?? []);
 
-    $("#stat-confidence").textContent = top ? `${top.confidence}%` : "—";
-    $("#stat-confidence").className = "";
-    $("#stat-count").textContent = payload.total_detections;
-    $("#stat-count").className = "";
-    $("#stat-latency").textContent = `${payload.inference_ms} ms`;
-    $("#stat-latency").className = "";
+    $("#detections-caption").textContent =
+      payload.detections.length === 0
+        ? "No lesion passed the confidence threshold"
+        : `Detections — highest confidence ${top ? `${top.confidence}%` : "—"}`;
 
-    const verdict = $("#verdict");
-    if (info) {
-      verdict.hidden = false;
-      verdict.className = `verdict is-${info.severity}`;
-      $("#verdict-title").textContent = info.label;
-      const badge = $("#verdict-badge");
-      badge.textContent = info.status;
-      badge.className = `badge is-${info.severity}`;
-      $("#verdict-pathogen").textContent = info.pathogen;
-      $("#verdict-summary").textContent = info.summary;
-      fillList($("#verdict-symptoms"), info.symptoms);
-      fillList($("#verdict-treatment"), info.treatment);
-    } else {
-      verdict.hidden = true;
-    }
+    const rows = $("#detection-rows");
+    rows.replaceChildren();
+    payload.detections
+      .slice()
+      .sort((a, b) => b.confidence - a.confidence)
+      .forEach((detection, index) => {
+        const row = document.createElement("tr");
+        const name = document.createElement("td");
+        name.textContent = detection.label_text ?? detection.label;
+        const value = document.createElement("td");
+        value.className = "num";
+        value.textContent = `${detection.confidence}%`;
+        const bar = document.createElement("td");
+        bar.innerHTML = '<div class="meter"><i></i></div>';
+        rows.append(row);
+        row.append(name, value, bar);
+        const fill = bar.querySelector("i");
+        fill.dataset.kind = meterKind(detection);
+        setTimeout(() => (fill.style.width = `${detection.confidence}%`), 40 + index * 60);
+      });
+  }
 
-    const list = $("#det-list");
-    list.innerHTML = "";
-    if (!payload.detections.length) {
-      list.innerHTML = '<p style="color:var(--faint);font-size:.85rem;">No leaf detected above the confidence threshold. Try lowering it or use a closer photo.</p>';
-    }
-    payload.detections.forEach((detection, index) => {
-      const row = document.createElement("div");
-      row.className = "det";
-      row.innerHTML = `
-        <div class="det-head">
-          <b>${detection.label_text || detection.label}</b>
-          <span class="mono">${detection.confidence}%</span>
-        </div>
-        <div class="meter"><i class="${meterKind(detection)}"></i></div>`;
-      list.appendChild(row);
-      const bar = row.querySelector("i");
-      setTimeout(() => (bar.style.width = `${detection.confidence}%`), 40 + index * 70);
+  function renderQueue() {
+    const host = $("#queue");
+    host.replaceChildren();
+    if (state.batch.length < 2) return;
+
+    const heading = document.createElement("h4");
+    heading.className = "readout__heading";
+    heading.textContent = `Batch results (${state.batch.length})`;
+    host.appendChild(heading);
+
+    state.batch.forEach((item, index) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "queue__row";
+      if (item.annotated_image) {
+        const thumb = document.createElement("img");
+        thumb.src = item.annotated_image;
+        thumb.alt = "";
+        row.appendChild(thumb);
+      }
+      const label = document.createElement("b");
+      label.textContent = item.filename ?? `Photograph ${index + 1}`;
+      const verdict = document.createElement("span");
+      verdict.textContent = item.error
+        ? item.error
+        : `${item.info?.label ?? item.dominant_class} · ${item.inference_ms} ms`;
+      row.append(label, verdict);
+      if (!item.error) {
+        row.addEventListener("click", () => renderResult(item));
+      } else {
+        row.disabled = true;
+      }
+      host.appendChild(row);
     });
-
-    if (!options.silent) {
-      $("#result-body").scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
   }
 
   /* --------------------------------------------------------------- actions */
@@ -368,20 +472,21 @@
     if (!state.result?.annotated_image) return;
     const link = document.createElement("a");
     link.href = state.result.annotated_image;
-    link.download = `coffee-leaf-result-${Date.now()}.jpg`;
+    link.download = `coffee-leaf-${state.result.dominant_class ?? "result"}.jpg`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    toast("Annotated result downloaded.", "success");
+    toast("Annotated photograph downloaded.", "success");
   });
 
   $("#btn-copy").addEventListener("click", async () => {
     if (!state.result) return;
+    const { dominant_class, inference_ms, detections, info } = state.result;
     const summary = {
-      dominant_class: state.result.dominant_class,
-      verdict: state.result.info?.label ?? null,
-      inference_ms: state.result.inference_ms,
-      detections: state.result.detections.map(({ label, confidence, box }) => ({ label, confidence, box })),
+      dominant_class,
+      verdict: info?.label ?? null,
+      inference_ms,
+      detections: detections.map(({ label, confidence, box }) => ({ label, confidence, box })),
     };
     try {
       await navigator.clipboard.writeText(JSON.stringify(summary, null, 2));
@@ -393,9 +498,11 @@
 
   $("#btn-reset").addEventListener("click", () => {
     state.result = null;
+    state.batch = [];
     $("#result-body").hidden = true;
     $("#result-empty").hidden = false;
-    clearPreview();
+    renderQueue();
+    clearFiles();
   });
 
   /* --------------------------------------------------------------- history */
@@ -404,7 +511,7 @@
       const image = new Image();
       image.onload = () => {
         const canvas = document.createElement("canvas");
-        const scale = Math.min(1, 220 / image.width);
+        const scale = Math.min(1, 200 / image.width);
         canvas.width = Math.round(image.width * scale);
         canvas.height = Math.round(image.height * scale);
         canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -417,7 +524,7 @@
 
   function readHistory() {
     try {
-      return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
     } catch {
       return [];
     }
@@ -433,16 +540,15 @@
       inference_ms: payload.inference_ms,
       total_detections: payload.total_detections,
       frame: payload.frame,
-      thumb: await thumbnail(payload.cropped_image || payload.annotated_image),
       annotated_image: payload.annotated_image,
+      thumb: await thumbnail(payload.cropped_image || payload.annotated_image),
     };
     const history = [entry, ...readHistory()].slice(0, HISTORY_LIMIT);
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     } catch {
-      // Quota exceeded: keep the entries that still fit.
       try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 4)));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 3)));
       } catch {
         localStorage.removeItem(HISTORY_KEY);
       }
@@ -453,52 +559,73 @@
   function relativeTime(timestamp) {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
     if (seconds < 60) return "just now";
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
     return new Date(timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   }
 
   function renderHistory() {
-    const rail = $("#history-rail");
+    const rail = $("#rail");
     const history = readHistory();
-    rail.innerHTML = "";
+    rail.replaceChildren();
     if (!history.length) {
-      rail.innerHTML = "<p>No scans yet in this browser.</p>";
+      const empty = document.createElement("p");
+      empty.textContent = "Nothing yet — run a detection and it will appear here.";
+      rail.appendChild(empty);
       return;
     }
     history.forEach((entry) => {
       const item = document.createElement("button");
       item.type = "button";
-      item.className = "history-item";
-      item.innerHTML = `
-        <img src="${entry.thumb}" alt="">
-        <div>
-          <b>${entry.info?.label || entry.dominant_class || "—"}</b>
-          <small>${entry.mode === "camera" ? "cam" : "file"} · ${relativeTime(entry.at)}</small>
-        </div>`;
-      item.addEventListener("click", () => {
-        renderResult({ ...entry, original_image: "", cropped_image: "" });
-        toast("Restored an earlier scan from this browser.", "info");
-      });
+      item.className = "rail__item";
+      const thumb = document.createElement("img");
+      thumb.src = entry.thumb;
+      thumb.alt = "";
+      const body = document.createElement("div");
+      const label = document.createElement("b");
+      label.textContent = entry.info?.label ?? entry.dominant_class ?? "—";
+      const meta = document.createElement("small");
+      meta.textContent = `${entry.inference_ms} ms · ${relativeTime(entry.at)}`;
+      body.append(label, meta);
+      item.append(thumb, body);
+      item.addEventListener("click", () => renderResult(entry));
       rail.appendChild(item);
     });
   }
 
-  $("#history-clear").addEventListener("click", () => {
+  $("#rail-clear").addEventListener("click", () => {
     localStorage.removeItem(HISTORY_KEY);
     renderHistory();
     toast("Local scan history cleared.", "info");
   });
 
-  /* --------------------------------------------------------------- lightbox */
+  /* --------------------------------------------------------------- classes */
+  const tabs = $$("#explorer-tabs .tab");
+  tabs.forEach((tab) =>
+    tab.addEventListener("click", () => {
+      const key = tab.dataset.class;
+      tabs.forEach((other) => other.setAttribute("aria-selected", String(other === tab)));
+      $$("#explorer-stage .explorer__pair").forEach(
+        (pair) => (pair.hidden = pair.dataset.class !== key)
+      );
+      $$("#explorer-readout > div").forEach((panel) => (panel.hidden = panel.id !== `panel-${key}`));
+
+      const stage = $("#explorer-stage");
+      stage.classList.remove("explorer__stage--swap");
+      void stage.offsetWidth; // restart the entrance animation
+      stage.classList.add("explorer__stage--swap");
+    })
+  );
+
+  /* -------------------------------------------------------------- lightbox */
   const lightbox = $("#lightbox");
   document.addEventListener("click", (event) => {
     const target = event.target.closest("[data-zoom]");
     if (!target?.src) return;
     $("#lightbox-img").src = target.src;
-    lightbox.classList.add("is-open");
+    lightbox.dataset.open = "";
   });
-  const closeLightbox = () => lightbox.classList.remove("is-open");
+  const closeLightbox = () => delete lightbox.dataset.open;
   $("#lightbox-close").addEventListener("click", closeLightbox);
   lightbox.addEventListener("click", (event) => {
     if (event.target === lightbox) closeLightbox();
@@ -507,29 +634,14 @@
     if (event.key === "Escape") closeLightbox();
   });
 
-  /* ----------------------------------------------------------------- status */
-  async function pollHealth() {
-    const pill = $("#status-pill");
-    const text = $("#status-text");
-    try {
-      const response = await fetch("/health", { cache: "no-store" });
-      const data = await response.json();
-      pill.classList.remove("is-offline");
-      text.textContent = data.using_fallback_weights ? "fallback model" : "model ready";
-      if (data.using_fallback_weights) pill.classList.add("is-offline");
-    } catch {
-      pill.classList.add("is-offline");
-      text.textContent = "offline";
-    }
+  /* ------------------------------------------------------------------ boot */
+  try {
+    armRisers();
+    renderHistory();
+    syncRun();
+  } catch (error) {
+    // Never leave the page hidden because of a script failure.
+    $$(".rise").forEach((el) => (el.dataset.shown = ""));
+    console.error(error);
   }
-  pollHealth();
-  window.addEventListener("online", pollHealth);
-  window.addEventListener("offline", () => {
-    $("#status-pill").classList.add("is-offline");
-    $("#status-text").textContent = "offline";
-  });
-
-  /* ------------------------------------------------------------------- boot */
-  renderHistory();
-  syncRunButton();
 })();

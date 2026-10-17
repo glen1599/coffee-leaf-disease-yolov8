@@ -10,7 +10,7 @@ import logging
 import os
 
 from coffee_leaf import create_app
-from coffee_leaf.config import APP_NAME, APP_VERSION, CONF_THRESHOLD
+from coffee_leaf.config import APP_NAME, APP_VERSION
 
 app = create_app()
 

@@ -13,11 +13,23 @@ from pathlib import Path
 APP_NAME = "Coffee Leaf Disease Detection"
 APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
 
+# Decompression-bomb guard. OpenCV reads this limit when the library
+# initialises, so it must be set before ``cv2`` is imported anywhere in the
+# process. ``coffee_leaf/__init__.py`` imports this module first, which
+# guarantees the ordering for every entrypoint.
+MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", str(40_000_000)))
+os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", str(MAX_IMAGE_PIXELS))
+
 # --- Paths (resolved from the repository root: clone-and-run friendly) -----
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 
+# Trained checkpoint. A sibling ``.onnx`` export is preferred when present.
+# It is NOT faster in this project (see scripts/benchmark.py -- both backends
+# measure ~43 ms) and Ultralytics still loads it through torch, so treat ONNX
+# as the route to a torch-free deployment, not as a speed-up.
 MODEL_PATH = Path(os.getenv("MODEL_PATH", str(MODELS_DIR / "best.pt")))
+ONNX_MODEL_PATH = MODEL_PATH.with_suffix(".onnx")
 # YOLOv8n COCO weights used only when the trained checkpoint is missing.
 # Ultralytics auto-downloads them when the local file is absent.
 _LOCAL_FALLBACK = MODELS_DIR / "yolov8n.pt"
@@ -30,10 +42,37 @@ JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "85"))
 # --- Upload validation ----------------------------------------------------
 ALLOWED_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "bmp", "webp"})
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))
+MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "8"))
 
-# --- Rate limiting (in-memory, per client IP) -----------------------------
+# --- Storage & rate limiting ---------------------------------------------
+# Anonymous scan log + rate-limit windows, in a single SQLite file.
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "instance" / "app.sqlite3")))
 RATE_LIMIT_MAX = int(os.getenv("RATE_LIMIT_MAX", "30"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+
+# --- Responses ------------------------------------------------------------
+# Hardening headers applied to every response (see coffee_leaf/__init__.py).
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(self), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    # No inline script and no inline style attribute anywhere in the markup;
+    # the page only sets custom properties through CSSOM, which CSP allows.
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "img-src 'self' data: blob:; "
+        "style-src 'self'; "
+        "script-src 'self'; "
+        "connect-src 'self'; "
+        "font-src 'self'; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "object-src 'none'"
+    ),
+}
 
 # --- Reported validation metrics ------------------------------------------
 # Last epoch of docs/training/results.csv (50 epochs, YOLOv8n, 640px).
@@ -52,6 +91,16 @@ CLASS_LABELS = {
     "bercak_phoma": "Phoma Leaf Spot",
     "karat_daun": "Coffee Leaf Rust",
     "pengorok_daun": "Leaf Miner",
+}
+
+# --- Showcase samples -----------------------------------------------------
+# Real photographs shipped with the repository, one per class. They power the
+# "try a sample" shortcuts and the class explorer on the landing page.
+SAMPLES = {
+    "bercak_phoma": "img/samples/phoma_leaf_spot.jpg",
+    "karat_daun": "img/samples/coffee_leaf_rust.jpg",
+    "pengorok_daun": "img/samples/leaf_miner.jpg",
+    "sehat": "img/samples/healthy_leaf.jpg",
 }
 
 # --- Domain knowledge base ------------------------------------------------

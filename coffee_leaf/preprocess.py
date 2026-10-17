@@ -11,13 +11,27 @@ PADDING = 10
 MIN_AREA_RATIO = 0.03
 
 
+def _stretch_to_uint8(values: np.ndarray) -> np.ndarray:
+    """Scale an arbitrary float array onto the full 0-255 uint8 range.
+
+    Equivalent to ``cv2.normalize(..., NORM_MINMAX, dtype=CV_8U)`` but done in
+    NumPy, which keeps the dtypes explicit and skips the destination buffer the
+    OpenCV signature would otherwise demand.
+    """
+    low = float(values.min())
+    span = float(values.max()) - low
+    if span < 1e-6:
+        return np.zeros(values.shape, dtype=np.uint8)
+    return (((values - low) / span) * 255.0).astype(np.uint8)
+
+
 def auto_crop_leaf(image: np.ndarray) -> np.ndarray:
     """Return a tight crop around the largest green region of ``image``.
 
     Two independent green indices are thresholded with Otsu's method and
-    intersected, which is more robust than a single fixed HSV range for
-    photos taken under varying light. The original image is returned
-    unchanged when no region is found.
+    intersected, which is more robust than a single fixed HSV range for photos
+    taken under varying light. The original image is returned unchanged when no
+    region is found.
 
     Args:
         image: BGR uint8 image as produced by ``cv2.imdecode``.
@@ -32,17 +46,13 @@ def auto_crop_leaf(image: np.ndarray) -> np.ndarray:
 
     # Index 1: normalised green.
     total = green + blue + red + 1e-6
-    normalised_green = cv2.normalize(green / total, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     _, mask_green = cv2.threshold(
-        normalised_green, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        _stretch_to_uint8(green / total), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
 
     # Index 2: excess green (2G - R - B).
-    excess_green = cv2.normalize(
-        green * 2 - blue - red, None, 0, 255, cv2.NORM_MINMAX
-    ).astype(np.uint8)
     _, mask_excess = cv2.threshold(
-        excess_green, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        _stretch_to_uint8(green * 2 - blue - red), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )
 
     mask = cv2.bitwise_and(mask_green, mask_excess)

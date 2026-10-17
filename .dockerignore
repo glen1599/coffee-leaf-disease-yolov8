@@ -1,0 +1,28 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.py[cod]
+
+# Runtime state and local data: never bake these into an image.
+instance
+datasets
+uploads
+*.sqlite3
+*.log
+.env
+
+# Tooling / editor
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.idea
+.vscode
+.DS_Store
+
+# Docs and CI noise
+docs/screenshots
+.github
+*.md
+!README.md

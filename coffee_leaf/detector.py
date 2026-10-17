@@ -28,6 +28,7 @@ class LeafDetector:
     def __init__(
         self,
         weights: str | Path,
+        onnx_weights: str | Path | None = None,
         fallback_weights: str = "yolov8n.pt",
         conf_threshold: float = 0.25,
         jpeg_quality: int = 85,
@@ -35,18 +36,34 @@ class LeafDetector:
         self.conf_threshold = conf_threshold
         self.jpeg_quality = jpeg_quality
         self.model, self.weights_used, self.used_fallback = self._load(
-            Path(weights), fallback_weights
+            Path(weights), Path(onnx_weights) if onnx_weights else None, fallback_weights
         )
         self.class_names: dict[int, str] = dict(self.model.names)
 
-    def _load(self, weights: Path, fallback: str) -> tuple[YOLO, str, bool]:
-        """Load the trained checkpoint, falling back to the base COCO model."""
+    @property
+    def runtime(self) -> str:
+        """Backend actually in use, derived from the loaded artefact."""
+        suffix = Path(self.weights_used).suffix.lower()
+        return {".onnx": "onnxruntime", ".pt": "pytorch", ".engine": "tensorrt"}.get(
+            suffix, "ultralytics"
+        )
+
+    def _load(
+        self, weights: Path, onnx_weights: Path | None, fallback: str
+    ) -> tuple[YOLO, str, bool]:
+        """Load the best available checkpoint, preferring the ONNX export.
+
+        Ultralytics exposes the same API for every backend, so preferring ONNX
+        is a one-line change with no downstream impact — and it removes the
+        torch dependency from the request path.
+        """
+        if onnx_weights is not None and onnx_weights.is_file():
+            logger.info("Loaded ONNX export: %s", onnx_weights)
+            return YOLO(str(onnx_weights), task="detect"), str(onnx_weights), False
         if weights.is_file():
             logger.info("Loaded trained weights: %s", weights)
             return YOLO(str(weights)), str(weights), False
-        logger.warning(
-            "Trained weights not found at %s - falling back to %s", weights, fallback
-        )
+        logger.warning("Trained weights not found at %s - falling back to %s", weights, fallback)
         return YOLO(fallback), fallback, True
 
     @property
@@ -56,12 +73,10 @@ class LeafDetector:
 
     def _encode_jpeg(self, image: np.ndarray) -> str:
         """Encode a BGR image as a base64 JPEG data URI."""
-        ok, buffer = cv2.imencode(
-            ".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
-        )
+        ok, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
         if not ok:
             raise RuntimeError("Failed to encode the image as JPEG")
-        return "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")
+        return "data:image/jpeg;base64," + base64.b64encode(buffer.tobytes()).decode("ascii")
 
     def predict(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
         """Run detection on a BGR image and return a JSON-serialisable payload.
@@ -109,7 +124,7 @@ class LeafDetector:
             best_score[label] = max(best_score.get(label, 0.0), score)
 
         # The dominant class is the one with the single highest confidence.
-        dominant = max(best_score, key=best_score.get) if best_score else None
+        dominant = max(best_score, key=lambda label: best_score[label]) if best_score else None
 
         return {
             "annotated_image": self._encode_jpeg(result.plot()),

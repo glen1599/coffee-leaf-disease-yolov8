@@ -1,55 +1,37 @@
-"""Minimal thread-safe in-memory rate limiter.
+"""Per-client rate limiting backed by the shared SQLite store.
 
-ponytail: per-process memory only -- correct for a single dev/preview worker.
-Swap for Flask-Limiter backed by Redis when scaling past one process.
+The window lives in SQLite rather than in process memory so the quota is
+shared across worker processes and survives a restart. At the request rates
+this app serves, the write cost is negligible.
 """
 
 from __future__ import annotations
 
-import time
-from collections import defaultdict, deque
+from collections.abc import Callable
 from functools import wraps
-from threading import Lock
-from typing import Callable, TypeVar
+from typing import TypeVar
 
-from flask import jsonify, request
-
-from .config import RATE_LIMIT_MAX, RATE_LIMIT_WINDOW
+from flask import current_app, jsonify, request
 
 ViewFunction = TypeVar("ViewFunction", bound=Callable)
 
 
-class RateLimiter:
-    """Sliding-window limiter keyed by an arbitrary string."""
-
-    def __init__(self, limit: int, window: int) -> None:
-        self.limit = limit
-        self.window = window
-        self._hits: dict[str, deque[float]] = defaultdict(deque)
-        self._lock = Lock()
-
-    def allow(self, key: str) -> bool:
-        """Record a hit for ``key``; return ``False`` when the quota is spent."""
-        now = time.monotonic()
-        with self._lock:
-            hits = self._hits[key]
-            while hits and now - hits[0] > self.window:
-                hits.popleft()
-            if len(hits) >= self.limit:
-                return False
-            hits.append(now)
-            return True
-
-
-limiter = RateLimiter(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW)
-
-
 def rate_limit(view: ViewFunction) -> ViewFunction:
-    """Reject the request with HTTP 429 once the client's quota is exhausted."""
+    """Reject the request with HTTP 429 once the client's quota is exhausted.
+
+    The limit and window are read from ``app.config`` on every call so they
+    stay overridable per environment and per test.
+    """
 
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if not limiter.allow(request.remote_addr or "unknown"):
+        store = current_app.extensions["store"]
+        allowed = store.allow(
+            request.remote_addr or "unknown",
+            current_app.config["RATE_LIMIT_MAX"],
+            current_app.config["RATE_LIMIT_WINDOW"],
+        )
+        if not allowed:
             return jsonify({"error": "Too many requests. Please wait a moment."}), 429
         return view(*args, **kwargs)
 

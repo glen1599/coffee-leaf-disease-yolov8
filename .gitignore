@@ -10,13 +10,19 @@ env/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+# requirements.txt already pins every resolved version; the uv lock file adds
+# ~670 KB of per-platform wheel hashes without changing what gets installed.
+uv.lock
 
 # --- Machine learning artefacts -------------------------------------------
-# Only the fine-tuned checkpoint is versioned; base and experimental
-# weights stay local.
+# Only the fine-tuned checkpoint is versioned; base weights and derived
+# exports stay local.
 *.pt
 !models/best.pt
 models/yolov8n.pt
+# Derived from best.pt — regenerate with:
+#   yolo export model=models/best.pt format=onnx opset=12 simplify=True
+models/best.onnx
 runs/
 runs.zip
 datasets/
@@ -26,6 +32,10 @@ weights/
 # --- Runtime ---------------------------------------------------------------
 *.log
 .env
+instance/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 
 # --- Editors / OS ----------------------------------------------------------
 .DS_Store
