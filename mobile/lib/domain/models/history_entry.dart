@@ -10,6 +10,7 @@ class HistoryEntry {
     this.block,
     this.completedSteps = const {},
     this.reminderAt,
+    this.reminderDays,
   });
 
   factory HistoryEntry.fromJson(Map<String, dynamic> json) => HistoryEntry(
@@ -25,6 +26,7 @@ class HistoryEntry {
     reminderAt: json['reminder_at'] == null
         ? null
         : DateTime.parse(json['reminder_at'] as String),
+    reminderDays: (json['reminder_days'] as num?)?.toInt(),
   );
 
   final String id;
@@ -43,10 +45,14 @@ class HistoryEntry {
   /// When the phone should remind the farmer to check again, if asked.
   final DateTime? reminderAt;
 
+  /// The option the farmer picked for [reminderAt]: in how many days.
+  final int? reminderDays;
+
   HistoryEntry copyWith({
     String? Function()? block,
     Set<int>? completedSteps,
     DateTime? Function()? reminderAt,
+    int? Function()? reminderDays,
   }) => HistoryEntry(
     id: id,
     createdAt: createdAt,
@@ -55,6 +61,7 @@ class HistoryEntry {
     block: block == null ? this.block : block(),
     completedSteps: completedSteps ?? this.completedSteps,
     reminderAt: reminderAt == null ? this.reminderAt : reminderAt(),
+    reminderDays: reminderDays == null ? this.reminderDays : reminderDays(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -65,5 +72,6 @@ class HistoryEntry {
     'block': block,
     'completed_steps': completedSteps.toList()..sort(),
     'reminder_at': reminderAt?.toIso8601String(),
+    'reminder_days': reminderDays,
   };
 }

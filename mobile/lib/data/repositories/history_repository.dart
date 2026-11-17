@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/models/history_entry.dart';
 import '../../domain/models/scan_result.dart';
@@ -16,7 +17,11 @@ class HistoryRepository {
 
   final Directory _directory;
   final DateTime Function() _clock;
+  final _changes = _Changes();
   List<HistoryEntry>? _cache;
+
+  /// Fires after a check was added, changed or deleted.
+  Listenable get changes => _changes;
 
   File get _index => File('${_directory.path}/$_indexName');
 
@@ -57,6 +62,9 @@ class HistoryRepository {
     await _directory.create(recursive: true);
     await imageOf(entry).writeAsBytes(imageBytes, flush: true);
     entries.insert(0, entry);
+    // Normally a no-op; keeps "newest first" true even if the phone's clock
+    // was set back between two checks.
+    entries.sort(_newestFirst);
     await _save(entries);
     return entry;
   }
@@ -110,7 +118,7 @@ class HistoryRepository {
         entries.clear();
       }
     }
-    entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    entries.sort(_newestFirst);
     return _cache = entries;
   }
 
@@ -125,10 +133,18 @@ class HistoryRepository {
     );
     await temporary.rename(_index.path);
     _cache = entries;
+    _changes.fire();
   }
+
+  static int _newestFirst(HistoryEntry a, HistoryEntry b) =>
+      b.createdAt.compareTo(a.createdAt);
 
   static String? _clean(String? block) {
     final trimmed = block?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
+}
+
+class _Changes extends ChangeNotifier {
+  void fire() => notifyListeners();
 }

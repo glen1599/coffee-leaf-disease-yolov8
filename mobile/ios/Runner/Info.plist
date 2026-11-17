@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera dipakai untuk memotret daun kopi yang ingin diperiksa.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Galeri dipakai untuk memilih foto daun kopi yang ingin diperiksa.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Cek Daun Kopi</string>
 	<key>CFBundleExecutable</key>
