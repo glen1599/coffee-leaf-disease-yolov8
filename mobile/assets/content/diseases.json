@@ -1,0 +1,222 @@
+{
+  "default_language": "id",
+  "languages": [
+    "id",
+    "en"
+  ],
+  "diseases": {
+    "id": [
+      {
+        "id": "bercak_phoma",
+        "name": "Bercak Phoma",
+        "status": "Patogen terdeteksi",
+        "severity": "high",
+        "severity_label": "Berbahaya",
+        "pathogen": "Phoma spp. (jamur)",
+        "summary": "Infeksi jamur yang menimbulkan bercak mati berwarna cokelat sampai hitam. Jika dibiarkan, bercak menyatu dan mematikan jaringan daun secara permanen.",
+        "symptoms": [
+          "Bercak bulat cokelat tua dengan bagian tengah abu-abu lebih terang",
+          "Bercak membesar dan menyatu di helai daun",
+          "Daun rontok sebelum waktunya pada serangan berat"
+        ],
+        "treatment": [
+          "Semprot fungisida berbahan mankozeb atau klorotalonil dengan selang 7-10 hari.",
+          "Pangkas dan musnahkan daun yang terinfeksi; bakar sisa tanaman yang dibuang.",
+          "Perbaiki drainase tanah untuk menurunkan kelembapan di sekitar tajuk.",
+          "Hindari penyiraman dari atas karena menyebarkan spora antartanaman."
+        ]
+      },
+      {
+        "id": "karat_daun",
+        "name": "Karat Daun",
+        "status": "Patogen terdeteksi",
+        "severity": "high",
+        "severity_label": "Berbahaya",
+        "pathogen": "Hemileia vastatrix (jamur)",
+        "summary": "Infeksi karat yang ganas. Bintil spora berwarna kuning-jingga muncul di sisi bawah daun dan bisa membuat daun rontok massal serta hasil panen turun.",
+        "symptoms": [
+          "Bintil bertepung kuning-jingga di sisi bawah daun",
+          "Bercak kuning pucat di sisi atas daun",
+          "Daun rontok, dimulai dari cabang bawah"
+        ],
+        "treatment": [
+          "Semprot fungisida sistemik golongan triazol (misalnya triadimefon) begitu gejala pertama terlihat.",
+          "Pisahkan dan musnahkan tanaman yang terinfeksi berat, jauh dari blok utama.",
+          "Jarangkan tajuk supaya udara dan sinar matahari lebih mudah masuk.",
+          "Tanam varietas kopi tahan karat pada musim tanam berikutnya."
+        ]
+      },
+      {
+        "id": "pengorok_daun",
+        "name": "Pengorok Daun",
+        "status": "Hama terdeteksi",
+        "severity": "moderate",
+        "severity_label": "Perlu perhatian",
+        "pathogen": "Pectinifera spp. (larva)",
+        "summary": "Larva membuat terowongan di dalam jaringan daun dan meninggalkan alur putih berkelok yang merusak klorofil serta menurunkan kemampuan fotosintesis.",
+        "symptoms": [
+          "Alur putih atau bening yang berkelok-kelok di helai daun",
+          "Permukaan daun melepuh dan berubah bentuk di sepanjang alur",
+          "Tanaman kurang subur dan luas daun berkurang pada cabang yang terserang"
+        ],
+        "treatment": [
+          "Semprot insektisida sistemik berbahan abamektin sesuai dosis anjuran.",
+          "Pasang perangkap lekat kuning untuk mengendalikan populasi lalat dewasa.",
+          "Pangkas daun yang masih ada alur aktifnya dan musnahkan larva di dalamnya.",
+          "Tingkatkan pengamatan di blok yang terserang menjadi seminggu sekali."
+        ]
+      },
+      {
+        "id": "sehat",
+        "name": "Daun Sehat",
+        "status": "Tidak ada patogen",
+        "severity": "none",
+        "severity_label": "Sehat",
+        "pathogen": "Tidak ada",
+        "summary": "Bentuk daun utuh dan sehat. Klorofil tersebar merata tanpa tanda patogen, spora jamur, atau kerusakan akibat hama.",
+        "symptoms": [
+          "Warna hijau merata",
+          "Tidak ada bercak, alur, atau bintil spora",
+          "Helai dan tulang daun utuh"
+        ],
+        "treatment": [
+          "Pertahankan jadwal penyiraman biasa sesuai kelembapan tanah.",
+          "Lanjutkan pemupukan NPK secara rutin.",
+          "Lakukan pemangkasan rutin untuk menjaga bentuk tajuk.",
+          "Terus pantau hama dan penyakit secara berkala."
+        ]
+      }
+    ],
+    "en": [
+      {
+        "id": "bercak_phoma",
+        "name": "Phoma Leaf Spot",
+        "status": "Pathogen detected",
+        "severity": "high",
+        "severity_label": "Dangerous",
+        "pathogen": "Phoma spp. (fungus)",
+        "summary": "A fungal infection that produces necrotic brown-to-black lesions. Left untreated the lesions merge and kill the leaf tissue permanently.",
+        "symptoms": [
+          "Dark brown circular spots with a lighter grey centre",
+          "Lesions that enlarge and merge across the blade",
+          "Premature leaf drop in severe infections"
+        ],
+        "treatment": [
+          "Apply a fungicide based on mancozeb or chlorothalonil on a 7-10 day interval.",
+          "Prune and destroy infected leaves; burn the removed plant debris.",
+          "Improve soil drainage to lower humidity around the canopy.",
+          "Avoid overhead irrigation, which spreads spores between plants."
+        ]
+      },
+      {
+        "id": "karat_daun",
+        "name": "Coffee Leaf Rust",
+        "status": "Pathogen detected",
+        "severity": "high",
+        "severity_label": "Dangerous",
+        "pathogen": "Hemileia vastatrix (fungus)",
+        "summary": "Aggressive rust infection. Orange-yellow spore pustules form on the underside of the leaf and can trigger mass defoliation and yield loss.",
+        "symptoms": [
+          "Yellow-orange powdery pustules on the leaf underside",
+          "Yellow chlorotic blotches on the upper surface",
+          "Defoliation starting from the lower branches"
+        ],
+        "treatment": [
+          "Apply a systemic triazole fungicide (e.g. triadimefon) at the first symptoms.",
+          "Isolate and destroy heavily infected plants away from the main block.",
+          "Thin the canopy to improve airflow and sunlight penetration.",
+          "Plant rust-resistant coffee varieties for the next cycle."
+        ]
+      },
+      {
+        "id": "pengorok_daun",
+        "name": "Leaf Miner",
+        "status": "Pest detected",
+        "severity": "moderate",
+        "severity_label": "Needs attention",
+        "pathogen": "Pectinifera spp. (larvae)",
+        "summary": "Larvae tunnel through the leaf mesophyll, leaving white winding mines that destroy chlorophyll and reduce photosynthetic capacity.",
+        "symptoms": [
+          "White or translucent winding galleries across the blade",
+          "Blistered, distorted leaf surface along the mine",
+          "Reduced vigour and leaf area on infested branches"
+        ],
+        "treatment": [
+          "Apply a systemic insecticide based on abamectin at the recommended dose.",
+          "Deploy yellow sticky traps to control the adult fly population.",
+          "Prune leaves showing active mines and destroy the larvae inside.",
+          "Increase scouting of the affected block to a weekly schedule."
+        ]
+      },
+      {
+        "id": "sehat",
+        "name": "Healthy",
+        "status": "No pathogen found",
+        "severity": "none",
+        "severity_label": "Healthy",
+        "pathogen": "None",
+        "summary": "The leaf morphology is intact and healthy. Chlorophyll is evenly distributed with no signs of pathogens, fungal spores or pest damage.",
+        "symptoms": [
+          "Uniform green colouration",
+          "No lesions, mines or spore pustules",
+          "Intact blade and veins"
+        ],
+        "treatment": [
+          "Keep the standard irrigation schedule based on soil moisture.",
+          "Continue the regular NPK fertilisation cycle.",
+          "Run routine pruning to maintain the canopy shape.",
+          "Keep monitoring for pests and diseases at regular intervals."
+        ]
+      }
+    ]
+  },
+  "severity_labels": {
+    "none": {
+      "id": "Sehat",
+      "en": "Healthy"
+    },
+    "moderate": {
+      "id": "Perlu perhatian",
+      "en": "Needs attention"
+    },
+    "high": {
+      "id": "Berbahaya",
+      "en": "Dangerous"
+    }
+  },
+  "confidence": {
+    "high_from": 85.0,
+    "medium_from": 60.0,
+    "labels": {
+      "high": {
+        "id": "Sangat yakin",
+        "en": "Very confident"
+      },
+      "medium": {
+        "id": "Cukup yakin",
+        "en": "Fairly confident"
+      },
+      "low": {
+        "id": "Kurang yakin",
+        "en": "Not confident"
+      }
+    }
+  },
+  "messages": {
+    "no_leaf_detected": {
+      "id": "Daun kopi tidak terlihat. Pastikan satu daun memenuhi foto, cahayanya terang, dan gambarnya tidak buram.",
+      "en": "No coffee leaf was detected. Make sure a single leaf fills the photo, in bright light and in focus."
+    }
+  },
+  "disclaimer": {
+    "id": "Saran ini bersifat umum. Tanyakan dulu ke penyuluh pertanian setempat sebelum menyemprot.",
+    "en": "The treatment text is generic. Confirm with a local extension officer before spraying."
+  },
+  "metrics": {
+    "precision": 96.99,
+    "recall": 96.59,
+    "f1_score": 96.79,
+    "map50": 98.49,
+    "map50_95": 76.32
+  }
+}
