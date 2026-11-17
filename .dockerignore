@@ -26,3 +26,6 @@ docs/screenshots
 .github
 *.md
 !README.md
+
+# The Flutter app is built separately and ships its own copy of the model.
+mobile
