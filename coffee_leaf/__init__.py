@@ -8,6 +8,7 @@ from typing import Any
 
 from flask import Flask, jsonify, request, url_for
 
+from . import api_v1
 from .config import (
     APP_NAME,
     APP_VERSION,
@@ -77,6 +78,7 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
     )
     app.jinja_env.globals["asset"] = asset
     app.register_blueprint(bp)
+    app.register_blueprint(api_v1.bp)
 
     @app.after_request
     def harden(response):
@@ -93,8 +95,18 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
 
     @app.errorhandler(404)
     def not_found(_error):
+        if request.path.startswith(f"{api_v1.URL_PREFIX}/"):
+            return api_v1.error_response("not_found", 404)
         if request.path.startswith("/api/") or request.path.startswith("/predict"):
             return jsonify({"error": "Not found."}), 404
         return jsonify({"error": "Not found."}), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(error):
+        """Keep the JSON error shape for the versioned API; leave the rest alone."""
+        if request.path.startswith(f"{api_v1.URL_PREFIX}/"):
+            allowed = ", ".join(sorted(error.valid_methods or []))
+            return api_v1.error_response("method_not_allowed", 405, headers={"Allow": allowed})
+        return error
 
     return app

@@ -37,14 +37,11 @@ class FakeDetector:
     def runtime(self) -> str:
         return "fake"
 
-    def predict(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
+    def detect(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
         if image is None or image.size == 0:
             raise ValueError("Empty image passed to the detector")
         height, width = image.shape[:2]
         return {
-            "annotated_image": "data:image/jpeg;base64,AAA",
-            "original_image": "data:image/jpeg;base64,BBB",
-            "cropped_image": "data:image/jpeg;base64,CCC",
             "detections": [
                 {
                     "label": "karat_daun",
@@ -56,6 +53,14 @@ class FakeDetector:
             "frame": {"width": width, "height": height},
             "total_detections": 1,
             "inference_ms": 12.5,
+        }
+
+    def predict(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
+        return {
+            "annotated_image": "data:image/jpeg;base64,AAA",
+            "original_image": "data:image/jpeg;base64,BBB",
+            "cropped_image": "data:image/jpeg;base64,CCC",
+            **self.detect(image, conf),
         }
 
 

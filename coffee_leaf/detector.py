@@ -78,20 +78,11 @@ class LeafDetector:
             raise RuntimeError("Failed to encode the image as JPEG")
         return "data:image/jpeg;base64," + base64.b64encode(buffer.tobytes()).decode("ascii")
 
-    def predict(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
-        """Run detection on a BGR image and return a JSON-serialisable payload.
+    def _run(self, image: np.ndarray, conf: float | None) -> tuple[Any, dict[str, Any]]:
+        """Run the model once and return the raw result with its summary.
 
-        Args:
-            image: BGR uint8 array (as returned by ``cv2.imdecode``).
-            conf: Optional confidence override; falls back to the configured
-                threshold when ``None``.
-
-        Returns:
-            A mapping with the annotated/original/cropped data URIs, the raw
-            detections, the dominant class, the frame size and the latency.
-
-        Raises:
-            ValueError: If ``image`` is empty or not a valid array.
+        Shared by :meth:`detect` and :meth:`predict` so both report exactly
+        the same detections for the same image.
         """
         if image is None or image.size == 0:
             raise ValueError("Empty image passed to the detector")
@@ -126,13 +117,54 @@ class LeafDetector:
         # The dominant class is the one with the single highest confidence.
         dominant = max(best_score, key=lambda label: best_score[label]) if best_score else None
 
-        return {
-            "annotated_image": self._encode_jpeg(result.plot()),
-            "original_image": self._encode_jpeg(image),
-            "cropped_image": self._encode_jpeg(auto_crop_leaf(image)),
+        return result, {
             "detections": detections,
             "dominant_class": dominant,
             "frame": {"width": width, "height": height},
             "total_detections": len(detections),
             "inference_ms": elapsed_ms,
+        }
+
+    def detect(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
+        """Run detection and return the detections only, without any image.
+
+        This is the cheap path for native clients, which already hold the
+        photograph and draw the boxes themselves: no annotation, no leaf crop
+        and no JPEG encoding.
+
+        Args:
+            image: BGR uint8 array (as returned by ``cv2.imdecode``).
+            conf: Optional confidence override; falls back to the configured
+                threshold when ``None``.
+
+        Returns:
+            A mapping with the raw detections, the dominant class, the frame
+            size and the latency.
+
+        Raises:
+            ValueError: If ``image`` is empty or not a valid array.
+        """
+        return self._run(image, conf)[1]
+
+    def predict(self, image: np.ndarray, conf: float | None = None) -> dict[str, Any]:
+        """Run detection on a BGR image and return a JSON-serialisable payload.
+
+        Args:
+            image: BGR uint8 array (as returned by ``cv2.imdecode``).
+            conf: Optional confidence override; falls back to the configured
+                threshold when ``None``.
+
+        Returns:
+            A mapping with the annotated/original/cropped data URIs, the raw
+            detections, the dominant class, the frame size and the latency.
+
+        Raises:
+            ValueError: If ``image`` is empty or not a valid array.
+        """
+        result, summary = self._run(image, conf)
+        return {
+            "annotated_image": self._encode_jpeg(result.plot()),
+            "original_image": self._encode_jpeg(image),
+            "cropped_image": self._encode_jpeg(auto_crop_leaf(image)),
+            **summary,
         }

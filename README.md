@@ -16,7 +16,7 @@
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.9%2B-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
 [![CI](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml/badge.svg)](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-31%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-60%20passing-2ea44f)](tests/)
 [![mAP@50](https://img.shields.io/badge/mAP%4050-98.49%25-2ea44f)](#model-metrics)
 [![License](https://img.shields.io/badge/License-MIT-e0a96d)](LICENSE)
 
@@ -138,6 +138,8 @@ coffee-leaf-disease-yolov8/
 │   ├── __init__.py            #   factory, asset versioning, hardening
 │   ├── config.py              #   settings + disease knowledge base
 │   ├── routes.py              #   HTTP layer + validation
+│   ├── api_v1.py              #   versioned JSON API for the mobile app
+│   ├── content.py             #   Indonesian wording + API messages
 │   ├── detector.py            #   YOLOv8 / ONNX inference service
 │   ├── preprocess.py          #   OpenCV auto-crop
 │   ├── store.py               #   SQLite scan log + rate limits
@@ -146,7 +148,7 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # single-page dashboard
 ├── static/{css,js,img}/       # design system, controller, assets
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 31 tests, no model file needed
+├── tests/                     # 60 tests, no model file needed
 ├── docs/{MODEL_CARD.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
@@ -251,10 +253,78 @@ curl -s http://127.0.0.1:5000/predict \
 Errors always come back as JSON: `400` bad input, `413` too large, `429` rate limited,
 `500` inference failure.
 
+**REST API v1 (for the mobile app)**
+
+A versioned JSON API lives next to the web routes and leaves them untouched. Replies carry
+no base64 images (the phone already has the photo and draws the boxes itself), so a result
+is 1-4 KB instead of the 100-870 KB the web payload needs for the same sample photos. Text
+is Indonesian by default; add `lang=en` for English.
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| `GET` | `/api/v1/health` | — | Status, model provenance, upload limits, languages |
+| `GET` | `/api/v1/diseases` | optional `?lang=id\|en` | Every class with symptoms, treatment and severity, plus the model metrics |
+| `POST` | `/api/v1/predict` | `multipart`: `file`, optional `conf`, `lang` | Disease, confidence, boxes, treatment |
+
+```bash
+curl -s http://127.0.0.1:5050/api/v1/predict \
+  -F "file=@static/img/samples/coffee_leaf_rust.jpg"
+```
+
+```jsonc
+{
+  "detected": true,
+  "disease": {
+    "id": "karat_daun",
+    "name": "Karat Daun",
+    "status": "Patogen terdeteksi",
+    "severity": "high",
+    "severity_label": "Berbahaya",
+    "pathogen": "Hemileia vastatrix (jamur)",
+    "summary": "Infeksi karat yang ganas…",
+    "symptoms": ["Bintil bertepung kuning-jingga di sisi bawah daun", "…"],
+    "treatment": ["Semprot fungisida sistemik golongan triazol…", "…"]
+  },
+  "confidence": { "value": 86.3, "level": "high", "label": "Sangat yakin" },
+  "detections": [
+    {
+      "class_id": "karat_daun",
+      "name": "Karat Daun",
+      "confidence": 86.3,
+      "box": { "x1": 469, "y1": 593, "x2": 566, "y2": 701 }
+    }
+  ],
+  "total_detections": 26,
+  "image": { "width": 2048, "height": 1024 },
+  "inference_ms": 17.0,
+  "message": null,
+  "disclaimer": "Saran ini bersifat umum. Tanyakan dulu ke penyuluh pertanian setempat sebelum menyemprot."
+}
+```
+
+A photo with no coffee leaf in it is still a `200`: `detected` is `false`, `disease` is
+`null` and `message` says what to do. The confidence wording is a presentation band on the
+top score (`CONFIDENCE_HIGH=85`, `CONFIDENCE_MEDIUM=60`), not a calibrated probability.
+
+Every error has one shape, with a stable machine-readable code:
+
+```json
+{ "error": { "code": "unsupported_format", "message": "Format file tidak didukung. Gunakan: BMP, JPEG, JPG, PNG, WEBP." } }
+```
+
+| Status | `code` |
+|--------|--------|
+| `400` | `missing_file`, `invalid_image`, `invalid_language` |
+| `404` / `405` | `not_found`, `method_not_allowed` |
+| `413` | `file_too_large` |
+| `415` | `unsupported_format` |
+| `429` | `rate_limited` (with a `Retry-After` header) |
+| `500` | `inference_failed`, `out_of_memory` |
+
 ### Testing
 
 ```bash
-pytest -q                 # 31 tests, no checkpoint needed
+pytest -q                 # 60 tests, no checkpoint needed
 ruff check . && ruff format --check .
 mypy
 ```
@@ -409,6 +479,8 @@ coffee-leaf-disease-yolov8/
 │   ├── __init__.py            #   factory, versioning aset, hardening
 │   ├── config.py              #   konfigurasi + basis pengetahuan penyakit
 │   ├── routes.py              #   lapisan HTTP + validasi
+│   ├── api_v1.py              #   API JSON berversi untuk aplikasi mobile
+│   ├── content.py             #   teks bahasa Indonesia + pesan API
 │   ├── detector.py            #   layanan inferensi YOLOv8 / ONNX
 │   ├── preprocess.py          #   auto-crop OpenCV
 │   ├── store.py               #   scan log SQLite + rate limit
@@ -417,7 +489,7 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # dashboard satu halaman
 ├── static/{css,js,img}/       # design system, controller, aset
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 31 test, tanpa perlu file model
+├── tests/                     # 60 test, tanpa perlu file model
 ├── docs/{MODEL_CARD.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
@@ -491,10 +563,45 @@ curl -s http://127.0.0.1:5050/predict \
 Error selalu JSON: `400` input salah, `413` terlalu besar, `429` kena rate limit,
 `500` inferensi gagal.
 
+**REST API v1 (untuk aplikasi mobile)**
+
+API JSON berversi ini berdampingan dengan rute web dan tidak mengubahnya. Balasannya tanpa
+gambar base64 (HP sudah punya fotonya dan menggambar kotaknya sendiri), jadi satu hasil
+hanya 1-4 KB, bukan 100-870 KB seperti payload web untuk foto contoh yang sama. Teks
+berbahasa Indonesia secara bawaan; tambahkan `lang=en` untuk bahasa Inggris.
+
+| Method | Path | Body | Mengembalikan |
+|--------|------|------|---------------|
+| `GET` | `/api/v1/health` | — | Status, asal model, batas unggah, bahasa |
+| `GET` | `/api/v1/diseases` | `?lang=id\|en` opsional | Semua kelas dengan gejala, penanganan, tingkat bahaya, dan metrik model |
+| `POST` | `/api/v1/predict` | `multipart`: `file`, `conf` dan `lang` opsional | Penyakit, keyakinan, kotak deteksi, penanganan |
+
+```bash
+curl -s http://127.0.0.1:5050/api/v1/predict \
+  -F "file=@static/img/samples/coffee_leaf_rust.jpg"
+```
+
+Foto tanpa daun kopi tetap dijawab `200`: `detected` bernilai `false`, `disease` bernilai
+`null`, dan `message` menjelaskan apa yang harus dilakukan. Label keyakinan ("Sangat
+yakin", "Cukup yakin", "Kurang yakin") adalah pengelompokan skor tertinggi
+(`CONFIDENCE_HIGH=85`, `CONFIDENCE_MEDIUM=60`), bukan probabilitas terkalibrasi.
+
+Semua error berbentuk sama, dengan kode yang stabil untuk dibaca program:
+
+```json
+{ "error": { "code": "unsupported_format", "message": "Format file tidak didukung. Gunakan: BMP, JPEG, JPG, PNG, WEBP." } }
+```
+
+Kode yang mungkin: `missing_file`, `invalid_image`, `invalid_language` (`400`),
+`not_found` (`404`), `method_not_allowed` (`405`), `file_too_large` (`413`),
+`unsupported_format` (`415`), `rate_limited` (`429`, dengan header `Retry-After`),
+`inference_failed` dan `out_of_memory` (`500`). Contoh balasan lengkap ada di bagian
+bahasa Inggris di atas.
+
 ## Testing
 
 ```bash
-pytest -q                 # 31 test, tanpa perlu checkpoint
+pytest -q                 # 60 test, tanpa perlu checkpoint
 ruff check . && ruff format --check .
 mypy
 ```

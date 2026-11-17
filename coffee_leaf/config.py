@@ -39,6 +39,13 @@ FALLBACK_WEIGHTS = str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.is_file() else "yolov
 CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.25"))
 JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "85"))
 
+# Plain-language confidence bands used by the JSON API and the mobile app.
+# These are presentation thresholds on the top detection score (in percent),
+# not calibrated probabilities -- see "No confidence calibration" in
+# docs/MODEL_CARD.md.
+CONFIDENCE_HIGH = float(os.getenv("CONFIDENCE_HIGH", "85"))
+CONFIDENCE_MEDIUM = float(os.getenv("CONFIDENCE_MEDIUM", "60"))
+
 # --- Upload validation ----------------------------------------------------
 ALLOWED_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "bmp", "webp"})
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))

@@ -16,22 +16,27 @@ from flask import current_app, jsonify, request
 ViewFunction = TypeVar("ViewFunction", bound=Callable)
 
 
-def rate_limit(view: ViewFunction) -> ViewFunction:
-    """Reject the request with HTTP 429 once the client's quota is exhausted.
+def client_allowed() -> bool:
+    """Consume one request from the calling client's quota.
 
-    The limit and window are read from ``app.config`` on every call so they
-    stay overridable per environment and per test.
+    Returns ``False`` once the quota for the current window is exhausted. The
+    limit and window are read from ``app.config`` on every call so they stay
+    overridable per environment and per test.
     """
+    store = current_app.extensions["store"]
+    return store.allow(
+        request.remote_addr or "unknown",
+        current_app.config["RATE_LIMIT_MAX"],
+        current_app.config["RATE_LIMIT_WINDOW"],
+    )
+
+
+def rate_limit(view: ViewFunction) -> ViewFunction:
+    """Reject the request with HTTP 429 once the client's quota is exhausted."""
 
     @wraps(view)
     def wrapper(*args, **kwargs):
-        store = current_app.extensions["store"]
-        allowed = store.allow(
-            request.remote_addr or "unknown",
-            current_app.config["RATE_LIMIT_MAX"],
-            current_app.config["RATE_LIMIT_WINDOW"],
-        )
-        if not allowed:
+        if not client_allowed():
             return jsonify({"error": "Too many requests. Please wait a moment."}), 429
         return view(*args, **kwargs)
 
