@@ -68,6 +68,19 @@ protocol — in a single HTTP request, with no file ever touching the disk.
 | 📊 | **Anonymous scan log** | Class + latency counters in SQLite for the dashboard. No images, no IPs, nothing identifying |
 | ♿ | **Accessible UI** | Reduced-motion, reduced-transparency, keyboard-operable compare slider, `aria-live` results |
 
+### Mobile app: Cek Daun Kopi
+
+The same model also runs **on the phone, offline**, in a Flutter app for Android and iOS
+written in plain Indonesian for smallholder farmers. Letterbox, output decoding and NMS
+are ported to pure Dart and checked against this server on real photos. Each check becomes
+a record the farmer can act on: a treatment checklist, the garden block, a re-check
+reminder and a seven-day summary. Details, architecture and the APK:
+[`mobile/README.md`](mobile/README.md).
+
+| Home | Result | History |
+|---|---|---|
+| ![Home](mobile/docs/screenshots/android/01-beranda.png) | ![Result](mobile/docs/screenshots/android/02-hasil.png) | ![History](mobile/docs/screenshots/android/05-riwayat.png) |
+
 ### How it works
 
 ```mermaid
@@ -370,8 +383,9 @@ Full intended use and reproduction steps: [`docs/MODEL_CARD.md`](docs/MODEL_CARD
 ### Roadmap
 
 - [ ] Tiled inference for high-resolution field photos
-- [ ] Bahasa Indonesia UI (currently English-only)
-- [ ] Export to TFLite for on-device phone inference
+- [ ] Bahasa Indonesia web UI (the [mobile app](mobile/README.md) and the `/api/v1` API are already in Indonesian)
+- [x] On-device phone inference: the [mobile app](mobile/README.md) runs the ONNX export with ONNX Runtime
+- [ ] A "not a coffee leaf" class, so unrelated photos are rejected instead of classified
 - [ ] Calibrate confidence scores so 0.9 means something
 - [ ] Grow the dataset beyond one collection
 
@@ -430,6 +444,19 @@ request HTTP, tanpa satu file pun menyentuh disk.
 | 🛡️ | **Aman sejak awal** | CSP tanpa inline script, `X-Frame-Options: DENY`, rate limit per-IP, guard 40 MP |
 | 📊 | **Scan log anonim** | Hitungan kelas + latensi di SQLite untuk dashboard. Tanpa gambar, tanpa IP |
 | ♿ | **UI aksesibel** | Reduced-motion, reduced-transparency, slider bisa pakai keyboard, hasil `aria-live` |
+
+## Aplikasi mobile: Cek Daun Kopi
+
+Model yang sama juga berjalan **di HP, tanpa internet**, lewat aplikasi Flutter untuk
+Android dan iOS berbahasa Indonesia sederhana untuk petani. Letterbox, pembacaan keluaran
+model, dan NMS ditulis ulang dalam Dart murni dan diuji sama dengan server ini pada foto
+asli. Setiap pemeriksaan menjadi catatan yang bisa ditindaklanjuti: checklist penanganan,
+lokasi blok kebun, pengingat periksa ulang, dan ringkasan 7 hari. Detail, arsitektur, dan
+APK: [`mobile/README.md`](mobile/README.md).
+
+| Beranda | Hasil | Riwayat |
+|---|---|---|
+| ![Beranda](mobile/docs/screenshots/android/01-beranda.png) | ![Hasil](mobile/docs/screenshots/android/02-hasil.png) | ![Riwayat](mobile/docs/screenshots/android/05-riwayat.png) |
 
 ## Cara kerjanya
 
@@ -664,8 +691,9 @@ Detail lengkap dan cara reproduksi: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
 ## Rencana ke depan
 
 - [ ] Tiled inference untuk foto lapangan resolusi tinggi
-- [ ] UI Bahasa Indonesia (sekarang masih Inggris)
-- [ ] Ekspor TFLite untuk inferensi on-device di HP
+- [ ] UI web Bahasa Indonesia ([aplikasi mobile](mobile/README.md) dan API `/api/v1` sudah berbahasa Indonesia)
+- [x] Inferensi di HP: [aplikasi mobile](mobile/README.md) menjalankan model ONNX dengan ONNX Runtime
+- [ ] Kelas "bukan daun kopi", supaya foto yang tidak relevan ditolak, bukan diberi diagnosis
 - [ ] Kalibrasi skor keyakinan supaya 0,9 benar-benar berarti
 - [ ] Perluas dataset di luar satu koleksi
 
