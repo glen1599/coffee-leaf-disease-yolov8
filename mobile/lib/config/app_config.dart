@@ -2,11 +2,16 @@
 ///
 /// Detection runs on the phone and needs none of this. The API is only used
 /// to refresh the knowledge base when a connection happens to be available.
-/// Point the app at a server with:
+/// The default is the public server (docs/DEPLOY_PYTHONANYWHERE.md); point the
+/// app elsewhere, or switch the refresh off with an empty value:
 ///
-///     flutter run --dart-define=API_BASE_URL=https://example.hf.space
+///     flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000
+///     flutter run --dart-define=API_BASE_URL=
 abstract final class AppConfig {
-  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://glendevit.pythonanywhere.com',
+  );
 
   static bool get hasApi => apiBaseUrl.isNotEmpty;
 

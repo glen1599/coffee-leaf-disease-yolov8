@@ -1,5 +1,7 @@
 # Deploy API ke PythonAnywhere (gratis, tanpa kartu kredit)
 
+Server yang sedang berjalan: <https://glendevit.pythonanywhere.com>
+
 Panduan ini memasang server Flask (web demo + API `/api/v1`) di
 [PythonAnywhere](https://www.pythonanywhere.com) dengan akun gratis
 (Beginner).
@@ -62,6 +64,11 @@ Skrip itu (`deploy/pythonanywhere/setup.sh`):
 
 Prosesnya ±3–5 menit, sebagian besar untuk mengunduh paket.
 
+> [!WARNING]
+> Ketik kedua perintah di **konsol Bash PythonAnywhere** (halaman web), bukan
+> di terminal komputer Anda. Prompt yang benar berbunyi seperti
+> `04:19 ~ $` di halaman pythonanywhere.com.
+
 ### 4. Nyalakan
 
 Kembali ke tab **Web**, klik tombol hijau **Reload**.
@@ -107,9 +114,9 @@ untuk branch lain jalankan `BRANCH=main bash setup.sh`.
 
 ## Batasan akun gratis
 
-- **Perpanjang tiap 3 bulan.** Web app gratis berhenti kalau tidak
-  diperpanjang. Di tab **Web** ada tombol **Run until 3 months from today**;
-  PythonAnywhere mengirim email pengingat sebelumnya.
+- **Perpanjang tiap bulan.** Web app gratis berhenti kalau tidak
+  diperpanjang. Di tab **Web** ada tombol **Run until 1 month from today**;
+  PythonAnywhere mengirim email pengingat seminggu sebelumnya.
 - **100 detik CPU per hari.** Satu pemeriksaan foto memakai sebagian kecil
   detik, jadi cukup untuk ratusan pemeriksaan sehari. Kalau habis, server
   tetap jalan tetapi lebih lambat sampai jatah diisi ulang.

@@ -10,13 +10,15 @@
 
 **Point a phone at a coffee leaf. Get a diagnosis, the lesions, and what to do next — in about 20 ms.**
 
+**Live demo:** <https://glendevit.pythonanywhere.com> · API: [`/api/v1/health`](https://glendevit.pythonanywhere.com/api/v1/health)
+
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![YOLOv8](https://img.shields.io/badge/Ultralytics-YOLOv8n-111F68)](https://docs.ultralytics.com/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.9%2B-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
 [![CI](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml/badge.svg)](https://github.com/glen1599/coffee-leaf-disease-yolov8/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-60%20passing-2ea44f)](tests/)
+[![Tests](https://img.shields.io/badge/tests-75%20passing-2ea44f)](tests/)
 [![mAP@50](https://img.shields.io/badge/mAP%4050-98.49%25-2ea44f)](#model-metrics)
 [![License](https://img.shields.io/badge/License-MIT-e0a96d)](LICENSE)
 

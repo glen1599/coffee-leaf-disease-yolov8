@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Release builds only get the network when asked for. Used to refresh the
+         disease text from the API; detection itself works offline. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Lets a "check again" reminder survive a restart of the phone. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
