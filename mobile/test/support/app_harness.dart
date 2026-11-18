@@ -8,7 +8,7 @@ import 'package:cek_daun_kopi/data/repositories/history_repository.dart';
 import 'package:cek_daun_kopi/ui/app_scope.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
@@ -101,13 +101,20 @@ class AppHarness {
   /// Widget tests run on a fake clock where real I/O never completes on its
   /// own; `runAsync` opens a window in which it can.
   Future<void> settle(WidgetTester tester) async {
-    for (var round = 0; round < 3; round++) {
+    // Keep opening real-time windows while something is still moving (the
+    // progress bar while a photo is analysed), for at most ~10 seconds.
+    for (var round = 0; round < 200; round++) {
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      if (round >= 2 && !tester.binding.hasScheduledFrame) break;
     }
-    await tester.pumpAndSettle();
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 10),
+    );
   }
 
   Future<void> tap(WidgetTester tester, Finder finder) async {
@@ -124,6 +131,22 @@ class AppHarness {
   Future<void> preview(WidgetTester tester, String name) async {
     final target = Platform.environment['PREVIEW_DIR'];
     if (target == null || target.isEmpty) return;
+    // Photos decode on real time, which the test clock does not give them.
+    // Loads started on the test clock may never finish, so start over.
+    imageCache
+      ..clear()
+      ..clearLiveImages();
+    await tester.runAsync(() async {
+      for (final element in find.byType(Image).evaluate()) {
+        final image = element.widget as Image;
+        await precacheImage(
+          image.image,
+          element,
+          onError: (_, _) {},
+        ).timeout(const Duration(seconds: 5), onTimeout: () {});
+      }
+    });
+    await tester.pump();
     await tester.runAsync(() async {
       final boundary =
           _boundary.currentContext!.findRenderObject()!

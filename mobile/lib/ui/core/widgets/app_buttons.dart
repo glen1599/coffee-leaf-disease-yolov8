@@ -4,10 +4,14 @@ import '../theme/app_text.dart';
 import '../theme/app_theme.dart';
 
 class _Label extends StatelessWidget {
-  const _Label({required this.label, this.icon});
+  const _Label({required this.label, this.icon, this.compact = false});
 
   final String label;
   final IconData? icon;
+
+  /// Two buttons side by side in a bar: smaller icon and gap, so the words
+  /// keep fitting.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -18,8 +22,8 @@ class _Label extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 24),
-        const SizedBox(width: 10),
+        Icon(icon, size: compact ? 20 : 24),
+        SizedBox(width: compact ? 8 : 10),
         Flexible(child: text),
       ],
     );
@@ -42,11 +46,18 @@ class PrimaryButton extends StatelessWidget {
   final double height;
 
   @override
-  Widget build(BuildContext context) => FilledButton(
-    onPressed: onPressed,
-    style: FilledButton.styleFrom(minimumSize: Size.fromHeight(height)),
-    child: _Label(label: label, icon: icon),
-  );
+  Widget build(BuildContext context) {
+    final compact = height < AppMetrics.buttonHeight;
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        minimumSize: Size.fromHeight(height),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+        textStyle: compact ? AppText.button.copyWith(fontSize: 16) : null,
+      ),
+      child: _Label(label: label, icon: icon, compact: compact),
+    );
+  }
 }
 
 /// The alternative next to a [PrimaryButton]: white with an outline.
@@ -65,11 +76,18 @@ class SecondaryButton extends StatelessWidget {
   final double height;
 
   @override
-  Widget build(BuildContext context) => OutlinedButton(
-    onPressed: onPressed,
-    style: OutlinedButton.styleFrom(minimumSize: Size.fromHeight(height)),
-    child: _Label(label: label, icon: icon),
-  );
+  Widget build(BuildContext context) {
+    final compact = height < AppMetrics.buttonHeight;
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: Size.fromHeight(height),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
+        textStyle: compact ? AppText.button.copyWith(fontSize: 16) : null,
+      ),
+      child: _Label(label: label, icon: icon, compact: compact),
+    );
+  }
 }
 
 /// A way out that should not compete for attention: green words only.

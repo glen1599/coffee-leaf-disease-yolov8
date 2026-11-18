@@ -79,6 +79,8 @@ class _NavItem extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 52),
           child: Column(
+            // The bar must keep its own height, not take the whole screen.
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(tab.icon, size: 24, color: color),
