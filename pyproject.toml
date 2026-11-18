@@ -18,6 +18,8 @@ dependencies = [
   "numpy>=1.26",
   "opencv-python>=4.9",
   "onnxruntime>=1.18",
+  # Ultralytics reads the metadata of models/best.onnx with it at load time.
+  "onnx>=1.16",
   "ultralytics>=8.3,<9.0",
   "gunicorn>=22.0",
 ]
