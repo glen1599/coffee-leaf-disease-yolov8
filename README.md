@@ -148,8 +148,9 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # single-page dashboard
 ├── static/{css,js,img}/       # design system, controller, assets
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 60 tests, no model file needed
-├── docs/{MODEL_CARD.md,screenshots,training}
+├── tests/                     # 63 tests, no model file needed
+├── deploy/huggingface/        # Dockerfile + card for a Hugging Face Space
+├── docs/{MODEL_CARD.md,DEPLOY_HUGGINGFACE.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
 ```
@@ -191,6 +192,15 @@ python app.py
 docker build -t coffee-leaf .
 docker run --rm -p 5000:5000 coffee-leaf
 ```
+</details>
+
+<details>
+<summary><b>On Hugging Face Spaces (free hosting)</b></summary>
+
+`python scripts/build_space.py` assembles a small folder with its own
+Dockerfile (port 7860, CPU-only PyTorch, proxy-aware rate limiting), ready to
+upload to a Space. Step-by-step guide (in Indonesian):
+[docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
 </details>
 
 Then open **http://127.0.0.1:5000** and drop a photo in.
@@ -324,7 +334,7 @@ Every error has one shape, with a stable machine-readable code:
 ### Testing
 
 ```bash
-pytest -q                 # 60 tests, no checkpoint needed
+pytest -q                 # 63 tests, no checkpoint needed
 ruff check . && ruff format --check .
 mypy
 ```
@@ -489,7 +499,8 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # dashboard satu halaman
 ├── static/{css,js,img}/       # design system, controller, aset
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 60 test, tanpa perlu file model
+├── tests/                     # 63 test, tanpa perlu file model
+├── deploy/huggingface/        # Dockerfile + kartu untuk Hugging Face Space
 ├── docs/{MODEL_CARD.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
@@ -532,6 +543,15 @@ python app.py
 docker build -t coffee-leaf .
 docker run --rm -p 5000:5000 coffee-leaf
 ```
+</details>
+
+<details>
+<summary><b>Di Hugging Face Spaces (hosting gratis)</b></summary>
+
+`python scripts/build_space.py` menyusun folder kecil dengan Dockerfile
+sendiri (port 7860, PyTorch versi CPU, batas permintaan yang membaca alamat
+asli di balik proxy), siap diunggah ke Space. Panduan lengkap:
+[docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
 </details>
 
 Buka **http://127.0.0.1:5000** lalu tarik satu foto ke sana.
@@ -601,7 +621,7 @@ bahasa Inggris di atas.
 ## Testing
 
 ```bash
-pytest -q                 # 60 test, tanpa perlu checkpoint
+pytest -q                 # 63 test, tanpa perlu checkpoint
 ruff check . && ruff format --check .
 mypy
 ```

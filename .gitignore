@@ -44,3 +44,6 @@ instance/
 .idea/
 .vscode/
 *.swp
+
+# --- Generated deploy folders (scripts/build_space.py) ----------------------
+/build/
