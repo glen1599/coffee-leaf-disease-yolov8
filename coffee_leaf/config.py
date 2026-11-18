@@ -37,6 +37,13 @@ FALLBACK_WEIGHTS = str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.is_file() else "yolov
 
 # --- Inference ------------------------------------------------------------
 CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.25"))
+# "ultralytics" (default): YOLO via Ultralytics, from the ONNX export or best.pt.
+# "onnx": the ONNX export through ONNX Runtime alone, no PyTorch needed; same
+# detections, a fraction of the memory (see coffee_leaf/onnx_detector.py).
+DETECTOR_BACKEND = os.getenv("DETECTOR_BACKEND", "ultralytics").strip().lower()
+# CPU threads for the light detector; 0 lets ONNX Runtime decide. Set it to the
+# real number of cores on a host that reports more than it grants.
+ONNX_THREADS = int(os.getenv("ONNX_THREADS", "0"))
 JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "85"))
 
 # Plain-language confidence bands used by the JSON API and the mobile app.

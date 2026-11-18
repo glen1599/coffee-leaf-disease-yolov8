@@ -16,17 +16,20 @@ from .config import (
     BASE_DIR,
     CONF_THRESHOLD,
     DATABASE_PATH,
+    DETECTOR_BACKEND,
     FALLBACK_WEIGHTS,
     JPEG_QUALITY,
     MAX_CONTENT_LENGTH,
     MODEL_PATH,
     ONNX_MODEL_PATH,
+    ONNX_THREADS,
     RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW,
     SECURITY_HEADERS,
     TRUSTED_PROXIES,
 )
 from .detector import LeafDetector
+from .onnx_detector import OnnxLeafDetector
 from .routes import bp
 from .store import Store
 
@@ -70,6 +73,7 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
         RATE_LIMIT_MAX=RATE_LIMIT_MAX,
         RATE_LIMIT_WINDOW=RATE_LIMIT_WINDOW,
         TRUSTED_PROXIES=TRUSTED_PROXIES,
+        DETECTOR_BACKEND=DETECTOR_BACKEND,
         JSON_SORT_KEYS=False,
     )
     if config_overrides:
@@ -84,9 +88,20 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
         )
 
     app.extensions["store"] = Store(app.config["DATABASE_PATH"])
-    app.extensions["detector"] = LeafDetector(
-        MODEL_PATH, ONNX_MODEL_PATH, FALLBACK_WEIGHTS, CONF_THRESHOLD, JPEG_QUALITY
-    )
+    backend = app.config["DETECTOR_BACKEND"]
+    if backend == "onnx":
+        app.extensions["detector"] = OnnxLeafDetector(
+            app.config.get("ONNX_MODEL_PATH", ONNX_MODEL_PATH),
+            CONF_THRESHOLD,
+            JPEG_QUALITY,
+            threads=ONNX_THREADS,
+        )
+    elif backend == "ultralytics":
+        app.extensions["detector"] = LeafDetector(
+            MODEL_PATH, ONNX_MODEL_PATH, FALLBACK_WEIGHTS, CONF_THRESHOLD, JPEG_QUALITY
+        )
+    else:
+        raise ValueError(f"DETECTOR_BACKEND must be 'ultralytics' or 'onnx', not {backend!r}")
     app.jinja_env.globals["asset"] = asset
     app.register_blueprint(bp)
     app.register_blueprint(api_v1.bp)

@@ -11,13 +11,15 @@ import base64
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
 from .preprocess import auto_crop_leaf
+
+if TYPE_CHECKING:  # Ultralytics is imported lazily, see _load.
+    from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,10 @@ class LeafDetector:
         is a one-line change with no downstream impact — and it removes the
         torch dependency from the request path.
         """
+        # Imported here: the light image (DETECTOR_BACKEND=onnx) ships without
+        # Ultralytics and PyTorch, yet still imports this module.
+        from ultralytics import YOLO
+
         if onnx_weights is not None and onnx_weights.is_file():
             logger.info("Loaded ONNX export: %s", onnx_weights)
             return YOLO(str(onnx_weights), task="detect"), str(onnx_weights), False
