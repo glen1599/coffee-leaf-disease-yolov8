@@ -8,6 +8,8 @@ import 'app.dart';
 import 'data/repositories/content_repository.dart';
 import 'data/repositories/detection_repository.dart';
 import 'data/repositories/history_repository.dart';
+import 'config/app_config.dart';
+import 'data/services/api_client.dart';
 import 'data/services/lazy_model_runner.dart';
 import 'data/services/onnx_model_runner.dart';
 import 'data/services/photo_picker.dart';
@@ -21,8 +23,12 @@ Future<void> main() async {
   // The layouts are designed for a phone held upright in one hand.
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  final content = await ContentRepository().load();
   final documents = await getApplicationDocumentsDirectory();
+  final contentRepository = ContentRepository(
+    cacheDirectory: Directory('${documents.path}/content'),
+    api: AppConfig.hasApi ? ApiClient(baseUrl: AppConfig.apiBaseUrl) : null,
+  );
+  final content = await contentRepository.load();
   final model = LazyModelRunner(OnnxModelRunner.load);
 
   runApp(
@@ -39,6 +45,10 @@ Future<void> main() async {
     ),
   );
 
-  // Load the model while the user is still looking at the first screen.
-  WidgetsBinding.instance.addPostFrameCallback((_) => model.warmUp());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Load the model while the user is still looking at the first screen.
+    model.warmUp();
+    // Fetch newer disease text if there is a connection; used next launch.
+    contentRepository.refresh().ignore();
+  });
 }

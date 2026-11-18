@@ -48,4 +48,17 @@ class Disease {
 
   /// What to do about it, in the order the knowledge base lists the steps.
   final List<String> treatment;
+
+  /// Same keys as the API, so a stored copy reads back with [Disease.fromJson].
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'status': status,
+    'severity': severity.name,
+    'severity_label': severityLabel,
+    'pathogen': pathogen,
+    'summary': summary,
+    'symptoms': symptoms,
+    'treatment': treatment,
+  };
 }

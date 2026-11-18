@@ -72,6 +72,21 @@ class ContentBundle {
   /// Validation metrics of the model, in percent.
   final Map<String, double> metrics;
 
+  /// This bundle with newer knowledge-base text, for example from the API.
+  ContentBundle withText({
+    required List<Disease> diseases,
+    required Map<String, double> metrics,
+    required String disclaimer,
+  }) => ContentBundle(
+    language: language,
+    diseases: List.unmodifiable(diseases),
+    confidenceBands: confidenceBands,
+    confidenceLabels: confidenceLabels,
+    noLeafMessage: noLeafMessage,
+    disclaimer: disclaimer,
+    metrics: Map.unmodifiable(metrics),
+  );
+
   /// The entry for a model class, or `null` for a class the bundle lacks.
   Disease? diseaseFor(String? classId) {
     for (final disease in diseases) {
