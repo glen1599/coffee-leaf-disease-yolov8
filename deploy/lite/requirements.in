@@ -1,6 +1,6 @@
 # Server without PyTorch or Ultralytics (DETECTOR_BACKEND=onnx).
 # Versions follow requirements.txt; regenerate the pinned file with:
-#   uv pip compile deploy/render/requirements.in --python-version 3.11 -o deploy/render/requirements.txt
+#   uv pip compile deploy/lite/requirements.in --python-version 3.11 -o deploy/lite/requirements.txt
 flask==3.1.3
 gunicorn==26.2.0
 numpy==2.4.6

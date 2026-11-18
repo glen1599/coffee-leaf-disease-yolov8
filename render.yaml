@@ -5,7 +5,7 @@ services:
     name: cek-daun-kopi-api
     runtime: docker
     plan: free
-    dockerfilePath: ./deploy/render/Dockerfile
+    dockerfilePath: ./deploy/lite/Dockerfile
     dockerContext: .
     healthCheckPath: /api/v1/health
     autoDeploy: true

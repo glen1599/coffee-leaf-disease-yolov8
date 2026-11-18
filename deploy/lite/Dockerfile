@@ -1,9 +1,9 @@
-# Light image for small free hosts such as Render (512 MB RAM).
+# Light image for small hosts such as Render's free plan (512 MB RAM).
 #
 # Runs the ONNX export with ONNX Runtime alone (DETECTOR_BACKEND=onnx): no
 # PyTorch, no Ultralytics, same detections. Build from the repository root:
 #
-#   docker build -f deploy/render/Dockerfile -t cek-daun-kopi-lite .
+#   docker build -f deploy/lite/Dockerfile -t cek-daun-kopi-lite .
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -21,7 +21,7 @@ RUN useradd --create-home --uid 1000 user \
     && install -d -o user -g user /home/user/app
 WORKDIR /home/user/app
 
-COPY deploy/render/requirements.txt ./requirements.txt
+COPY deploy/lite/requirements.txt ./requirements.txt
 RUN pip install --default-timeout=120 --retries 5 -r requirements.txt
 
 COPY --chown=user app.py LICENSE ./

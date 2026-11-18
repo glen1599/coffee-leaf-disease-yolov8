@@ -150,8 +150,8 @@ coffee-leaf-disease-yolov8/
 ├── static/{css,js,img}/       # design system, controller, assets
 ├── scripts/                   # export_cases.py · benchmark.py
 ├── tests/                     # 75 tests
-├── deploy/{render,huggingface}/  # light image for Render; Hugging Face Space
-├── docs/{MODEL_CARD.md,DEPLOY_RENDER.md,DEPLOY_HUGGINGFACE.md,screenshots,training}
+├── deploy/{lite,pythonanywhere,huggingface}/  # light server: Docker, PythonAnywhere; HF Space
+├── docs/{MODEL_CARD.md,DEPLOY_*.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
 ```
@@ -196,14 +196,18 @@ docker run --rm -p 5000:5000 coffee-leaf
 </details>
 
 <details>
-<summary><b>On Render (free hosting)</b></summary>
+<summary><b>Free hosting (PythonAnywhere, Render)</b></summary>
 
 `DETECTOR_BACKEND=onnx` runs the ONNX export with ONNX Runtime alone: same
-detections, no PyTorch, ~180 MB of memory, so it fits Render's 512 MB free
-plan. `render.yaml` and `deploy/render/Dockerfile` deploy it as a Blueprint.
-Step-by-step guide (in Indonesian): [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
-A Hugging Face Space package (needs a PRO account since 2026) is in
-[docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
+detections, no PyTorch, ~180 MB of memory and ~290 MB on disk, so it fits
+small free plans. Step-by-step guides (in Indonesian):
+
+- [PythonAnywhere](docs/DEPLOY_PYTHONANYWHERE.md), no credit card:
+  `deploy/pythonanywhere/setup.sh` installs or updates it in one command.
+- [Render](docs/DEPLOY_RENDER.md), Docker Blueprint (`render.yaml`,
+  `deploy/lite/Dockerfile`); asks for a card to verify the account.
+- [Hugging Face Spaces](docs/DEPLOY_HUGGINGFACE.md), full server; Docker
+  Spaces need a PRO account since 2026.
 </details>
 
 Then open **http://127.0.0.1:5000** and drop a photo in.
@@ -504,7 +508,7 @@ coffee-leaf-disease-yolov8/
 ├── static/{css,js,img}/       # design system, controller, aset
 ├── scripts/                   # export_cases.py · benchmark.py
 ├── tests/                     # 75 test
-├── deploy/{render,huggingface}/  # image ringan untuk Render; Hugging Face Space
+├── deploy/{lite,pythonanywhere,huggingface}/  # server ringan: Docker, PythonAnywhere; HF Space
 ├── docs/{MODEL_CARD.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
@@ -550,14 +554,19 @@ docker run --rm -p 5000:5000 coffee-leaf
 </details>
 
 <details>
-<summary><b>Di Render (hosting gratis)</b></summary>
+<summary><b>Hosting gratis (PythonAnywhere, Render)</b></summary>
 
 `DETECTOR_BACKEND=onnx` menjalankan model ONNX dengan ONNX Runtime saja: hasil
-deteksi sama, tanpa PyTorch, memori ±180 MB, sehingga muat di paket gratis
-Render (512 MB). `render.yaml` dan `deploy/render/Dockerfile` memasangnya
-sebagai Blueprint. Panduan lengkap: [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
-Paket untuk Hugging Face Space (sejak 2026 butuh akun PRO) ada di
-[docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
+deteksi sama, tanpa PyTorch, memori ±180 MB dan disk ±290 MB, sehingga muat di
+paket gratis yang kecil. Panduan langkah demi langkah:
+
+- [PythonAnywhere](docs/DEPLOY_PYTHONANYWHERE.md), tanpa kartu kredit:
+  `deploy/pythonanywhere/setup.sh` memasang atau memperbaruinya dengan satu
+  perintah.
+- [Render](docs/DEPLOY_RENDER.md), Blueprint Docker (`render.yaml`,
+  `deploy/lite/Dockerfile`); meminta kartu untuk verifikasi akun.
+- [Hugging Face Spaces](docs/DEPLOY_HUGGINGFACE.md), server lengkap; sejak
+  2026 Docker Space butuh akun PRO.
 </details>
 
 Buka **http://127.0.0.1:5000** lalu tarik satu foto ke sana.

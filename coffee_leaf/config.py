@@ -29,7 +29,7 @@ MODELS_DIR = BASE_DIR / "models"
 # measure ~43 ms) and Ultralytics still loads it through torch, so treat ONNX
 # as the route to a torch-free deployment, not as a speed-up.
 MODEL_PATH = Path(os.getenv("MODEL_PATH", str(MODELS_DIR / "best.pt")))
-ONNX_MODEL_PATH = MODEL_PATH.with_suffix(".onnx")
+ONNX_MODEL_PATH = Path(os.getenv("ONNX_MODEL_PATH", str(MODEL_PATH.with_suffix(".onnx"))))
 # YOLOv8n COCO weights used only when the trained checkpoint is missing.
 # Ultralytics auto-downloads them when the local file is absent.
 _LOCAL_FALLBACK = MODELS_DIR / "yolov8n.pt"

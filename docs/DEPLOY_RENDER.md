@@ -3,6 +3,11 @@
 Panduan ini memasang server Flask (web demo + API `/api/v1`) di
 [Render](https://render.com) dengan paket gratis.
 
+> [!NOTE]
+> Render bisa meminta kartu kredit untuk verifikasi akun sebelum membuat
+> layanan, walaupun paketnya gratis. Tanpa kartu, pakai
+> [PythonAnywhere](DEPLOY_PYTHONANYWHERE.md).
+
 Aplikasi HP **tidak butuh** server untuk mendeteksi penyakit: model berjalan
 di HP. Server dipakai untuk dua hal: demo web yang bisa dibuka siapa saja,
 dan memperbarui teks Info Penyakit di HP saat ada internet.
@@ -22,7 +27,7 @@ dijalankan dalam mode ringan:
 
 Mode dipilih dengan variabel `DETECTOR_BACKEND`. Bawaannya `ultralytics`,
 jadi menjalankan proyek di komputer tetap seperti biasa. Image Render
-(`deploy/render/Dockerfile`) memakai `onnx`.
+(`deploy/lite/Dockerfile`) memakai `onnx`.
 
 Pada uji dengan batas yang sama seperti paket gratis (512 MB, 0,1 CPU), satu
 pemeriksaan foto butuh 3–9 detik dan server siap dalam ±20 detik setelah
@@ -32,11 +37,11 @@ menyala.
 
 - `render.yaml` di akar repositori: satu web service gratis, Docker,
   health check ke `/api/v1/health`.
-- `deploy/render/Dockerfile`: hanya kode server, halaman web, dan model ONNX.
+- `deploy/lite/Dockerfile`: hanya kode server, halaman web, dan model ONNX.
   Modelnya diambil dari `mobile/assets/models/best.onnx`, salinan yang memang
   masuk git (file `models/best.onnx` tidak).
-- `deploy/render/requirements.txt`: Flask, Gunicorn, NumPy, OpenCV (headless),
-  ONNX Runtime. Dibuat dari `deploy/render/requirements.in`.
+- `deploy/lite/requirements.txt`: Flask, Gunicorn, NumPy, OpenCV (headless),
+  ONNX Runtime. Dibuat dari `deploy/lite/requirements.in`.
 
 ## Langkah-langkah
 
@@ -101,7 +106,7 @@ membangun dan memasang versi baru dengan sendirinya.
 ## Uji di komputer sendiri
 
 ```bash
-docker build -f deploy/render/Dockerfile -t cek-daun-kopi-lite .
+docker build -f deploy/lite/Dockerfile -t cek-daun-kopi-lite .
 ```
 
 Jalankan dengan batas yang sama seperti paket gratis Render:

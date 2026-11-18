@@ -4,11 +4,11 @@ blinker==1.9.0
 click==8.5.1
     # via flask
 flask==3.1.3
-    # via -r deploy/render/requirements.in
+    # via -r deploy/lite/requirements.in
 flatbuffers==25.12.19
     # via onnxruntime
 gunicorn==26.2.0
-    # via -r deploy/render/requirements.in
+    # via -r deploy/lite/requirements.in
 itsdangerous==2.2.0
     # via flask
 jinja2==3.1.6
@@ -20,13 +20,13 @@ markupsafe==3.0.4
     #   werkzeug
 numpy==2.4.6
     # via
-    #   -r deploy/render/requirements.in
+    #   -r deploy/lite/requirements.in
     #   onnxruntime
     #   opencv-python-headless
 onnxruntime==1.31.0
-    # via -r deploy/render/requirements.in
+    # via -r deploy/lite/requirements.in
 opencv-python-headless==5.0.0.93
-    # via -r deploy/render/requirements.in
+    # via -r deploy/lite/requirements.in
 packaging==26.3
     # via onnxruntime
 protobuf==7.36.2
