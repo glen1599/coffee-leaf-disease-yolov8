@@ -56,6 +56,11 @@ MAX_BATCH_FILES = int(os.getenv("MAX_BATCH_FILES", "8"))
 DATABASE_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "instance" / "app.sqlite3")))
 RATE_LIMIT_MAX = int(os.getenv("RATE_LIMIT_MAX", "30"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+# Reverse-proxy hops to trust when reading X-Forwarded-For. 0 when the app is
+# reached directly; 1 behind a single proxy such as Hugging Face Spaces.
+# Never set it higher than the real number of proxies: the header is
+# client-controlled beyond them.
+TRUSTED_PROXIES = int(os.getenv("TRUSTED_PROXIES", "0"))
 
 # --- Responses ------------------------------------------------------------
 # Hardening headers applied to every response (see coffee_leaf/__init__.py).

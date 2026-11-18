@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from flask import Flask, jsonify, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import api_v1
 from .config import (
@@ -23,6 +24,7 @@ from .config import (
     RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW,
     SECURITY_HEADERS,
+    TRUSTED_PROXIES,
 )
 from .detector import LeafDetector
 from .routes import bp
@@ -67,10 +69,19 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
         DATABASE_PATH=DATABASE_PATH,
         RATE_LIMIT_MAX=RATE_LIMIT_MAX,
         RATE_LIMIT_WINDOW=RATE_LIMIT_WINDOW,
+        TRUSTED_PROXIES=TRUSTED_PROXIES,
         JSON_SORT_KEYS=False,
     )
     if config_overrides:
         app.config.update(config_overrides)
+
+    hops = int(app.config["TRUSTED_PROXIES"])
+    if hops > 0:
+        # Recover the visitor's address (rate limiting) and scheme (URLs)
+        # from the proxy's X-Forwarded-* headers.
+        app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+            app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops
+        )
 
     app.extensions["store"] = Store(app.config["DATABASE_PATH"])
     app.extensions["detector"] = LeafDetector(
