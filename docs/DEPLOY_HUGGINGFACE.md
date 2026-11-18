@@ -1,21 +1,27 @@
 # Deploy API ke Hugging Face Spaces
 
+> [!IMPORTANT]
+> Sejak 2026, Hugging Face hanya mengizinkan Docker Space di hardware CPU dasar
+> untuk akun berlangganan **PRO** (atau organisasi Team/Enterprise). Akun gratis
+> mendapat galat pembayaran (HTTP 402) saat membuat Space.
+> Untuk hosting gratis, pakai [Render](DEPLOY_RENDER.md).
+
 Panduan ini memasang server Flask (web demo + API `/api/v1`) di
-[Hugging Face Spaces](https://huggingface.co/spaces) dengan hardware gratis
-(CPU dasar: 2 vCPU, 16 GB RAM).
+[Hugging Face Spaces](https://huggingface.co/spaces) dengan hardware CPU dasar
+(2 vCPU, 16 GB RAM).
 
 Aplikasi HP **tidak butuh** server untuk mendeteksi penyakit: model berjalan
 di HP. Server dipakai untuk dua hal: demo web yang bisa dibuka siapa saja,
 dan memperbarui teks Info Penyakit di HP saat ada internet.
 
-## Kenapa Hugging Face Spaces
+## Dibanding Render
 
-| | Hugging Face Spaces (gratis) | Render / Railway (gratis) |
+| | Hugging Face Spaces (PRO) | Render (gratis) |
 |---|---|---|
-| RAM | 16 GB | 512 MB, terlalu kecil untuk PyTorch + model |
-| Docker | Ya | Ya |
-| Kartu kredit | Tidak perlu | Sebagian perlu |
-| Kekurangan | Tidur setelah lama tidak dipakai; permintaan pertama sesudahnya menunggu ±1 menit | |
+| RAM | 16 GB | 512 MB |
+| Mode server | Biasa (Ultralytics + PyTorch) | Ringan (ONNX Runtime saja) |
+| Biaya | Langganan PRO | Gratis |
+| Kekurangan | Berbayar | Tidur setelah 15 menit sepi; lambat di 0,1 CPU |
 
 ## Isi yang diunggah
 
@@ -48,11 +54,15 @@ permintaan terlihat datang dari alamat proxy).
 ### 1. Akun dan login (dilakukan pemilik akun)
 
 1. Buat akun di <https://huggingface.co/join> dan verifikasi email.
-2. Pasang CLI Hugging Face:
+2. Pasang CLI Hugging Face sebagai alat terpisah (server tidak membutuhkannya,
+   jadi tidak dipasang di `.venv` proyek):
 
    ```bash
-   pip install -U huggingface_hub
+   uv tool install huggingface_hub
    ```
+
+   Tanpa `uv`: `pipx install huggingface_hub`. Kalau perintah `hf` belum
+   dikenali, buka tab terminal baru atau jalankan `uv tool update-shell`.
 
 3. Login. Perintah ini membuka browser; token tersimpan di komputer Anda
    sendiri:

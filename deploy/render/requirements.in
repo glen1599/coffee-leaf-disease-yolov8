@@ -1,0 +1,9 @@
+# Server without PyTorch or Ultralytics (DETECTOR_BACKEND=onnx).
+# Versions follow requirements.txt; regenerate the pinned file with:
+#   uv pip compile deploy/render/requirements.in --python-version 3.11 -o deploy/render/requirements.txt
+flask==3.1.3
+gunicorn==26.2.0
+numpy==2.4.6
+onnxruntime==1.31.0
+# Headless build: same OpenCV, without the GUI libraries a server never uses.
+opencv-python-headless==5.0.0.93

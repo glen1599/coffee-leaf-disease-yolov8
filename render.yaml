@@ -1,0 +1,11 @@
+# Render Blueprint: one free web service running the light server image.
+# Guide: docs/DEPLOY_RENDER.md
+services:
+  - type: web
+    name: cek-daun-kopi-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    autoDeploy: true

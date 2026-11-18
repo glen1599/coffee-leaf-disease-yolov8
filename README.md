@@ -141,6 +141,7 @@ coffee-leaf-disease-yolov8/
 │   ├── api_v1.py              #   versioned JSON API for the mobile app
 │   ├── content.py             #   Indonesian wording + API messages
 │   ├── detector.py            #   YOLOv8 / ONNX inference service
+│   ├── onnx_detector.py       #   same results with ONNX Runtime only
 │   ├── preprocess.py          #   OpenCV auto-crop
 │   ├── store.py               #   SQLite scan log + rate limits
 │   └── ratelimit.py           #   limiter decorator
@@ -148,9 +149,9 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # single-page dashboard
 ├── static/{css,js,img}/       # design system, controller, assets
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 63 tests, no model file needed
-├── deploy/huggingface/        # Dockerfile + card for a Hugging Face Space
-├── docs/{MODEL_CARD.md,DEPLOY_HUGGINGFACE.md,screenshots,training}
+├── tests/                     # 75 tests
+├── deploy/{render,huggingface}/  # light image for Render; Hugging Face Space
+├── docs/{MODEL_CARD.md,DEPLOY_RENDER.md,DEPLOY_HUGGINGFACE.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
 ```
@@ -195,11 +196,13 @@ docker run --rm -p 5000:5000 coffee-leaf
 </details>
 
 <details>
-<summary><b>On Hugging Face Spaces (free hosting)</b></summary>
+<summary><b>On Render (free hosting)</b></summary>
 
-`python scripts/build_space.py` assembles a small folder with its own
-Dockerfile (port 7860, CPU-only PyTorch, proxy-aware rate limiting), ready to
-upload to a Space. Step-by-step guide (in Indonesian):
+`DETECTOR_BACKEND=onnx` runs the ONNX export with ONNX Runtime alone: same
+detections, no PyTorch, ~180 MB of memory, so it fits Render's 512 MB free
+plan. `render.yaml` and `deploy/render/Dockerfile` deploy it as a Blueprint.
+Step-by-step guide (in Indonesian): [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
+A Hugging Face Space package (needs a PRO account since 2026) is in
 [docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
 </details>
 
@@ -334,7 +337,7 @@ Every error has one shape, with a stable machine-readable code:
 ### Testing
 
 ```bash
-pytest -q                 # 63 tests, no checkpoint needed
+pytest -q                 # 75 tests
 ruff check . && ruff format --check .
 mypy
 ```
@@ -492,6 +495,7 @@ coffee-leaf-disease-yolov8/
 │   ├── api_v1.py              #   API JSON berversi untuk aplikasi mobile
 │   ├── content.py             #   teks bahasa Indonesia + pesan API
 │   ├── detector.py            #   layanan inferensi YOLOv8 / ONNX
+│   ├── onnx_detector.py       #   hasil sama, hanya ONNX Runtime
 │   ├── preprocess.py          #   auto-crop OpenCV
 │   ├── store.py               #   scan log SQLite + rate limit
 │   └── ratelimit.py           #   dekorator limiter
@@ -499,8 +503,8 @@ coffee-leaf-disease-yolov8/
 ├── templates/index.html       # dashboard satu halaman
 ├── static/{css,js,img}/       # design system, controller, aset
 ├── scripts/                   # export_cases.py · benchmark.py
-├── tests/                     # 63 test, tanpa perlu file model
-├── deploy/huggingface/        # Dockerfile + kartu untuk Hugging Face Space
+├── tests/                     # 75 test
+├── deploy/{render,huggingface}/  # image ringan untuk Render; Hugging Face Space
 ├── docs/{MODEL_CARD.md,screenshots,training}
 ├── Dockerfile · .env.example · pyproject.toml
 └── requirements.txt
@@ -546,11 +550,13 @@ docker run --rm -p 5000:5000 coffee-leaf
 </details>
 
 <details>
-<summary><b>Di Hugging Face Spaces (hosting gratis)</b></summary>
+<summary><b>Di Render (hosting gratis)</b></summary>
 
-`python scripts/build_space.py` menyusun folder kecil dengan Dockerfile
-sendiri (port 7860, PyTorch versi CPU, batas permintaan yang membaca alamat
-asli di balik proxy), siap diunggah ke Space. Panduan lengkap:
+`DETECTOR_BACKEND=onnx` menjalankan model ONNX dengan ONNX Runtime saja: hasil
+deteksi sama, tanpa PyTorch, memori ±180 MB, sehingga muat di paket gratis
+Render (512 MB). `render.yaml` dan `deploy/render/Dockerfile` memasangnya
+sebagai Blueprint. Panduan lengkap: [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
+Paket untuk Hugging Face Space (sejak 2026 butuh akun PRO) ada di
 [docs/DEPLOY_HUGGINGFACE.md](docs/DEPLOY_HUGGINGFACE.md).
 </details>
 
@@ -621,7 +627,7 @@ bahasa Inggris di atas.
 ## Testing
 
 ```bash
-pytest -q                 # 63 test, tanpa perlu checkpoint
+pytest -q                 # 75 test
 ruff check . && ruff format --check .
 mypy
 ```

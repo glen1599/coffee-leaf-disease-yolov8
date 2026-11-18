@@ -29,3 +29,6 @@ docs/screenshots
 
 # The Flutter app is built separately and ships its own copy of the model.
 mobile
+# ...except its copy of the ONNX model, which is versioned (models/best.onnx
+# is not) and is all the light image (deploy/render) needs.
+!mobile/assets/models/best.onnx
